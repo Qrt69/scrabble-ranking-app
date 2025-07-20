@@ -2061,11 +2061,7 @@ if __name__ == "__main__":
     print("Starting Dash app...")
     # Use environment variable for port (Render requirement)
     port = int(os.environ.get("PORT", 8050))
-    debug = os.environ.get("DEBUG", "True").lower() == "true"  # Default to True for development
+    debug = os.environ.get("DEBUG", "False").lower() == "true"  # Default to False for production
     
-    if debug:
-        print("Open your browser and go to: http://127.0.0.1:8050")
-        app.run(debug=True, host="127.0.0.1", port=port)
-    else:
-        print(f"Starting production server on port {port}")
-        app.run(debug=False, host="0.0.0.0", port=port)
+    print(f"Starting server on port {port}")
+    app.run(debug=debug, host="0.0.0.0", port=port)
