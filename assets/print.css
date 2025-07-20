@@ -1,0 +1,77 @@
+/* Print styles for Scrabble Ranking App */
+
+@media print {
+    /* Hide elements that shouldn't be printed */
+    .btn, 
+    button,
+    .dash-dropdown,
+    .dash-upload,
+    .modal,
+    #admin-status,
+    #season-selector,
+    #tabs,
+    #print-trigger {
+        display: none !important;
+    }
+    
+    /* Show only the content */
+    .container {
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    
+    /* Table styles for print */
+    .dash-table-container {
+        width: 100% !important;
+        margin: 0 !important;
+    }
+    
+    .dash-spreadsheet-container {
+        width: 100% !important;
+        font-size: 12px !important;
+    }
+    
+    /* Ensure tables fit on page */
+    table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+    }
+    
+    th, td {
+        border: 1px solid #000 !important;
+        padding: 4px !important;
+        text-align: left !important;
+        font-size: 11px !important;
+    }
+    
+    /* Page breaks */
+    .dash-table-container {
+        page-break-inside: avoid;
+    }
+    
+    /* Header styles */
+    h1, h2, h3, h4 {
+        page-break-after: avoid;
+        margin-bottom: 10px !important;
+    }
+    
+    /* Ensure good contrast for print */
+    body {
+        color: #000 !important;
+        background: #fff !important;
+    }
+    
+    /* Remove shadows and backgrounds */
+    * {
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+    
+    /* Ensure links are visible */
+    a {
+        color: #000 !important;
+        text-decoration: underline !important;
+    }
+} 
