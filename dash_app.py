@@ -358,20 +358,18 @@ def load_member_data():
         except Exception as e:
             print(f"Error loading members.json: {e}")
     
-    # If JSON doesn't exist, create from Excel file
-    if os.path.exists("Info.xlsx"):
-        try:
-            df_leden = pd.read_excel("Info.xlsx", sheet_name="Leden")
-            df_leden.rename(columns={'NAAM': 'Naam'}, inplace=True)
-            
-            # Save to JSON for future use
-            save_member_data(df_leden)
-            return df_leden
-        except Exception as e:
-            print(f"Error loading from Info.xlsx: {e}")
+    # If JSON doesn't exist, create sample data
+    print("No members.json found, creating sample data")
+    sample_members = [
+        {'Naam': 'TORREELE Ronald', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'VANDENBERGHE Riet', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'FARASYN Kurt', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'}
+    ]
+    df_leden = pd.DataFrame(sample_members)
     
-    # Return empty DataFrame if no data available
-    return pd.DataFrame(columns=['Naam', 'CLUB', 'KLASSE'])
+    # Save to JSON for future use
+    save_member_data(df_leden)
+    return df_leden
 
 def save_member_data(df):
     """Save member data to JSON file"""
@@ -1394,12 +1392,8 @@ def process_upload(date, contents, filename):
     except Exception as e:
         return f'Fout bij het lezen van het CSV-bestand: {e}'
     
-    # Read supporting Excel file for leden
-    try:
-        df_leden = pd.read_excel('Info.xlsx', sheet_name='Leden')
-        df_leden.rename(columns={'NAAM': 'Naam'}, inplace=True)
-    except Exception as e:
-        return f'Fout bij het lezen van Info.xlsx: {e}'
+    # Use the global member data (loaded from JSON)
+    df_leden = load_member_data()
     
     # Always determine the season filename based on the uploaded date
     season_filename = get_season_filename(date_str)
