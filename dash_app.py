@@ -152,7 +152,7 @@ def get_available_pdf_reports():
                             year = '20' + year
                         date_str = f"{day.zfill(2)}/{month.zfill(2)}/{year}"
                         pdf_mapping[date_str] = filename
-            except:
+            except Exception as e:
                 continue
     
     return pdf_mapping
@@ -466,11 +466,19 @@ def make_table(df, table_id, title, klasse_filter_id=None):
         "backgroundColor": "#2c3e50",
         "color": "white",
         "textAlign": "center",
-        "border": "1px solid #34495e"
+        "border": "1px solid #34495e",
+        "cursor": "pointer !important",
+        "userSelect": "none"
     }
     
     # Initialize header conditional styling
-    style_header_conditional = []
+    style_header_conditional = [
+        {
+            "if": {"state": "selected"},
+            "backgroundColor": "#34495e",
+            "color": "white"
+        }
+    ]
     style_data_conditional = [
         {"if": {"row_index": "odd"}, "backgroundColor": "#f2f2f2"},
         {"if": {"row_index": "even"}, "backgroundColor": "#fff9c4"},
@@ -499,6 +507,7 @@ def make_table(df, table_id, title, klasse_filter_id=None):
         data=df.to_dict("records"),
         filter_action="native",
         sort_action="native",
+        sort_mode="single",
         page_size=25,
         style_cell=style_cell,
         style_cell_conditional=style_cell_conditional,
@@ -506,9 +515,8 @@ def make_table(df, table_id, title, klasse_filter_id=None):
         style_header_conditional=style_header_conditional,
         style_data_conditional=style_data_conditional,
         style_table={"width": "100%", "overflowX": "auto"},
-        persistence=True,
-        persisted_props=["filter_query", "sort_by"],
-        persistence_type="session",
+        # Ensure sorting works properly
+        sort_by=[],
     )
     
     # Add click event for Ranking Percent table
@@ -801,6 +809,8 @@ app.index_string = '''
                         window.print();
                     }
                 });
+                
+
             });
         </script>
     </head>
@@ -1000,6 +1010,10 @@ def dataframe_to_xlsx_bytes(df):
     df.to_excel(output, index=False)
     output.seek(0)
     return output.read()
+
+
+
+
 
 @app.callback(
     Output("download-info-xlsx", "data"),
@@ -1649,6 +1663,7 @@ def handle_game_pdf_selection(selected_date):
     
     # Check if this date has a PDF report
     pdf_mapping = get_available_pdf_reports()
+    
     if selected_date in pdf_mapping:
         pdf_filename = pdf_mapping[selected_date]
         pdf_path = f"Wedstrijdverslagen/{pdf_filename}"
@@ -1665,6 +1680,11 @@ def handle_game_pdf_selection(selected_date):
                 ),
                 html.Br(),
                 html.Small("PDF wordt direct getoond. Gebruik Ctrl+S of rechtermuisklik → 'Opslaan als' om het bestand te downloaden.", className="text-muted")
+            ])
+        else:
+            return html.Div([
+                html.H5(f"Wedstrijd {selected_date}", className="mb-3"),
+                html.P(f"PDF bestand niet gevonden: {pdf_path}", className="text-danger")
             ])
     else:
         return html.Div([
