@@ -47,6 +47,16 @@ def sync_pdf_files():
     
     print(f"PDF sync complete. {len(source_files)} files processed.")
 
+def encode_image(image_path):
+    """Encode image to base64 for embedding in HTML"""
+    try:
+        with open(image_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode()
+        return f"data:image/png;base64,{encoded_string}"
+    except FileNotFoundError:
+        print(f"Warning: Image file {image_path} not found")
+        return None
+
 # Sync PDF files on startup
 sync_pdf_files()
 
@@ -952,11 +962,33 @@ def render_tab(tab, selected_season):
         else:
             pdf_section = ""
         
+        # Encode the chocolate image
+        chocolate_image = encode_image("EAfscw4r9o.png")
+        
         return html.Div([
-            html.Div([
-                html.Button("Download Excel", id="download-info-btn", className="btn btn-success me-2"),
-                html.Button("Print", id="print-info-btn", className="btn btn-primary", 
-                          **{"data-print": "true"}),
+            # Header with chocolate image in upper right corner
+            dbc.Row([
+                dbc.Col([
+                    html.Div([
+                        html.Button("Download Excel", id="download-info-btn", className="btn btn-success me-2"),
+                        html.Button("Print", id="print-info-btn", className="btn btn-primary", 
+                                  **{"data-print": "true"}),
+                    ], className="mb-3"),
+                ], md=8),
+                dbc.Col([
+                    html.Div([
+                        html.Img(
+                            src=chocolate_image,
+                            style={
+                                "height": "60px",
+                                "width": "auto",
+                                "float": "right",
+                                "marginTop": "10px"
+                            },
+                            title="🍫 Solo Achievement - Hoogste score in een beurt en alleen!"
+                        ) if chocolate_image else html.Div()
+                    ], className="text-end")
+                ], md=4)
             ], className="mb-3"),
             dcc.Download(id="download-info-xlsx"),
             make_table(df_gen_info, "table-info", "Globaal Overzicht"),
