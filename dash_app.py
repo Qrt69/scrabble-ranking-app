@@ -1515,17 +1515,44 @@ def process_pdf_upload(n_clicks, contents, filename):
     
     # Check if PDF already exists for this date
     pdf_mapping = get_available_pdf_reports()
+    print(f"Checking for existing PDF for date: {date_str}")
+    print(f"Available PDFs: {list(pdf_mapping.keys())}")
     if date_str in pdf_mapping:
-        return f'⚠️ Er bestaat al een PDF-verslag voor {date_str}. Upload geannuleerd.'
+        existing_file = pdf_mapping[date_str]
+        print(f"Found existing file: {existing_file}")
+        return f'⚠️ Er bestaat al een PDF-verslag voor {date_str} ({existing_file}). Upload geannuleerd.'
     
     # Generate filename based on date (matching existing pattern)
     dt_obj = datetime.strptime(date_str, '%d/%m/%Y')
+    
+    # Check existing files to determine the next game number
+    existing_files = [f for f in os.listdir("Wedstrijdverslagen") if f.endswith('.pdf')]
+    
     if dt_obj.month in [7, 8]:
-        # Summer competition - use DD-M-YY format like existing files
-        filename_new = f"zomerwedstrijd van {dt_obj.day}-{dt_obj.month}-{str(dt_obj.year)[2:]}.pdf"
+        # Summer competition - find next game number
+        summer_files = [f for f in existing_files if f.startswith('zomerwedstrijd')]
+        if summer_files:
+            # Extract game numbers from existing summer files
+            game_numbers = []
+            for file in summer_files:
+                try:
+                    # Extract number from "zomerwedstrijd X van"
+                    parts = file.split(' van ')[0].split()
+                    if len(parts) >= 2 and parts[1].isdigit():
+                        game_numbers.append(int(parts[1]))
+                except:
+                    continue
+            next_game_number = max(game_numbers) + 1 if game_numbers else 1
+        else:
+            next_game_number = 1
+        
+        # Summer format: "zomerwedstrijd X van DD-M-YY.pdf"
+        filename_new = f"zomerwedstrijd {next_game_number} van {dt_obj.day}-{dt_obj.month}-{str(dt_obj.year)[2:]}.pdf"
+        print(f"Generated summer filename: {filename_new} (game number: {next_game_number})")
     else:
         # Regular season - use DD-M-YYYY format like existing files
         filename_new = f"wedstrijd van {dt_obj.day}-{dt_obj.month}-{dt_obj.year}.pdf"
+        print(f"Generated regular filename: {filename_new}")
     
     # Save PDF to assets folder
     try:
