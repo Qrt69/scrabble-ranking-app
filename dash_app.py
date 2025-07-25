@@ -386,33 +386,46 @@ def load_current_data():
     """Load data from the current season file"""
     global df_global, df_gen_info, df_pct_final, df_rp_final, df_pts_final, current_filename, available_seasons
     
+    print("=== Loading Current Data ===")
+    
     # Get available seasons
     available_seasons = get_available_seasons()
+    print(f"Available seasons: {[s['label'] for s in available_seasons]}")
     
     current_filename = get_current_season_filename()
+    print(f"Current filename: {current_filename}")
     
     # PRIORITY: Always check persistent data directory first for current season
     data_dir = get_persistent_data_dir()
     current_season_name = os.path.basename(current_filename)
     persistent_path = os.path.join(data_dir, current_season_name)
     
+    print(f"Persistent path: {persistent_path}")
+    print(f"Persistent exists: {os.path.exists(persistent_path)}")
+    print(f"Current exists: {os.path.exists(current_filename)}")
+    
     if os.path.exists(persistent_path):
         # Use the persistent data directory version (most up-to-date)
         filename = persistent_path
         current_filename = persistent_path
+        print(f"✓ Using persistent file: {filename}")
     elif os.path.exists(current_filename):
         # Fall back to current directory
         filename = current_filename
+        print(f"✓ Using current file: {filename}")
     elif available_seasons:
         # Fall back to first available season
         filename = available_seasons[0]["value"]
         current_filename = filename
+        print(f"✓ Using first available season: {filename}")
     elif os.path.exists("Globaal.xlsx"):
         # Final fallback
         filename = "Globaal.xlsx"
         current_filename = "Globaal.xlsx"
+        print(f"✓ Using fallback file: {filename}")
     else:
         # No data available
+        print("✗ No data files found!")
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
         df_pct_final = pd.DataFrame()
@@ -420,6 +433,7 @@ def load_current_data():
         df_pts_final = pd.DataFrame()
         return
     
+    print(f"Loading data from: {filename}")
     load_data_for_season(filename)
 
 # Load initial data
@@ -1614,14 +1628,24 @@ def process_upload(date, contents, filename):
     try:
         # Always save to persistent location first
         df_new.to_excel(season_filename, sheet_name='Globaal', index=False)
-        print(f"Saved {len(df_new)} rows to persistent location: {season_filename}")
+        print(f"✓ Saved {len(df_new)} rows to persistent location: {season_filename}")
         
         # Also update the current directory file to keep them in sync
         if os.path.exists(current_dir_file) or len(df_new) > 0:
             df_new.to_excel(current_dir_file, sheet_name='Globaal', index=False)
-            print(f"Also saved to current directory: {current_dir_file}")
+            print(f"✓ Also saved to current directory: {current_dir_file}")
+        
+        # Verify the file was actually saved
+        if os.path.exists(season_filename):
+            print(f"✓ Verified: persistent file exists after save")
+            # Check file size
+            file_size = os.path.getsize(season_filename)
+            print(f"✓ File size: {file_size} bytes")
+        else:
+            print(f"✗ ERROR: persistent file does not exist after save!")
             
     except Exception as e:
+        print(f"✗ Error saving file: {e}")
         return f'Fout bij het opslaan van {season_filename}: {e}'
     
     # Reload data
