@@ -1480,19 +1480,37 @@ def process_upload(date, contents, filename):
     season_filename = get_season_filename(date_str)
     
     # Check for duplicates and assign volgnummer
-    if os.path.exists(season_filename):
+    # First check if file exists in current directory (for existing files)
+    filename_only = os.path.basename(season_filename)
+    current_dir_file = filename_only
+    persistent_file = season_filename
+    
+    # Try to load existing data from either location
+    df_season = None
+    existing_file_path = None
+    
+    if os.path.exists(current_dir_file):
         try:
-            df_season = pd.read_excel(season_filename, sheet_name='Globaal')
+            df_season = pd.read_excel(current_dir_file, sheet_name='Globaal')
+            existing_file_path = current_dir_file
         except Exception as e:
-            return f'Fout bij het lezen van {season_filename}: {e}'
+            print(f"Error reading from current directory: {e}")
+    
+    if df_season is None and os.path.exists(persistent_file):
+        try:
+            df_season = pd.read_excel(persistent_file, sheet_name='Globaal')
+            existing_file_path = persistent_file
+        except Exception as e:
+            return f'Fout bij het lezen van {persistent_file}: {e}'
+    
+    if df_season is not None:
         # Check if this date already exists
         if (df_season['Datum'] == date_str).any():
-            return f'Deze uitslag voor {date_str} werd al ingelezen in {season_filename}.'
+            return f'Deze uitslag voor {date_str} werd al ingelezen in {existing_file_path}.'
         # Assign volgnummer as one more than the number of unique dates (sorted chronologically)
         unique_dates = sorted(pd.to_datetime(df_season['Datum'], dayfirst=True).unique())
         volgnummer = len(unique_dates) + 1
     else:
-        df_season = None
         volgnummer = 1
     
     # Prepare row_wedstrijdinfo
@@ -1515,7 +1533,13 @@ def process_upload(date, contents, filename):
     df_new = assign_smart_game_numbers(df_new)
     
     try:
+        # Always save to persistent location
         df_new.to_excel(season_filename, sheet_name='Globaal', index=False)
+        
+        # If we read from current directory, also update the current directory file
+        if existing_file_path and existing_file_path != season_filename:
+            df_new.to_excel(existing_file_path, sheet_name='Globaal', index=False)
+            
     except Exception as e:
         return f'Fout bij het opslaan van {season_filename}: {e}'
     
