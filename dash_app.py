@@ -474,6 +474,37 @@ def test_render_storage():
 # Run storage test
 test_render_storage()
 
+# Sync existing data to persistent storage
+def sync_existing_data_to_persistent():
+    """Copy existing Excel files to persistent storage if they don't exist there"""
+    print("=== Syncing Data to Persistent Storage ===")
+    
+    data_dir = get_persistent_data_dir()
+    
+    # Files to sync
+    files_to_sync = [
+        "Zomer 2025.xlsx",
+        "Globaal 2024-2025.xlsx", 
+        "Globaal.xlsx"
+    ]
+    
+    for filename in files_to_sync:
+        if os.path.exists(filename):
+            persistent_path = os.path.join(data_dir, filename)
+            
+            if not os.path.exists(persistent_path):
+                try:
+                    import shutil
+                    shutil.copy2(filename, persistent_path)
+                    print(f"✓ Synced {filename} to persistent storage")
+                except Exception as e:
+                    print(f"✗ Error syncing {filename}: {e}")
+            else:
+                print(f"✓ {filename} already exists in persistent storage")
+
+# Sync data on startup
+sync_existing_data_to_persistent()
+
 # Member management functions
 def load_member_data():
     """Load member data from JSON file or create from Excel if not exists"""
