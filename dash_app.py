@@ -425,6 +425,41 @@ def load_current_data():
 # Load initial data
 load_current_data()
 
+# Test Render.com storage on startup
+def test_render_storage():
+    """Test if Render.com storage is working"""
+    print("=== Testing Render.com Storage ===")
+    
+    is_render = os.environ.get("RENDER")
+    print(f"Running on Render: {is_render}")
+    
+    if is_render:
+        data_dir = "/opt/render/project/src/data"
+    else:
+        data_dir = "./data"
+    
+    print(f"Data directory: {data_dir}")
+    
+    try:
+        os.makedirs(data_dir, exist_ok=True)
+        test_file = os.path.join(data_dir, "startup_test.txt")
+        
+        with open(test_file, 'w') as f:
+            f.write(f"App started at {datetime.now()}")
+        
+        with open(test_file, 'r') as f:
+            content = f.read()
+        
+        print(f"✓ Storage test successful: {content}")
+        os.remove(test_file)
+        
+    except Exception as e:
+        print(f"✗ Storage test failed: {e}")
+        print("⚠️  WARNING: Uploaded games may not persist!")
+
+# Run storage test
+test_render_storage()
+
 # Member management functions
 def load_member_data():
     """Load member data from JSON file or create from Excel if not exists"""
