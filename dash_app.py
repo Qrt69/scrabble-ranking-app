@@ -247,6 +247,9 @@ def get_available_seasons():
     # Get persistent data directory
     data_dir = get_persistent_data_dir()
     
+    # Create a dictionary to track the best version of each file
+    file_versions = {}
+    
     # Look for regular season files (Globaal YYYY-YYYY.xlsx) in both current dir and data dir
     globaal_files = glob.glob("Globaal *.xlsx") + glob.glob(os.path.join(data_dir, "Globaal *.xlsx"))
     for file in globaal_files:
@@ -254,10 +257,14 @@ def get_available_seasons():
         try:
             filename = os.path.basename(file)  # Get just the filename, not the full path
             year_range = filename.replace("Globaal ", "").replace(".xlsx", "")
-            seasons.append({
-                "label": f"Seizoen {year_range}",
-                "value": file  # Keep full path for loading
-            })
+            
+            # Prioritize persistent data directory over current directory
+            if filename not in file_versions or file.startswith(data_dir):
+                file_versions[filename] = {
+                    "label": f"Seizoen {year_range}",
+                    "value": file,  # Keep full path for loading
+                    "year_range": year_range
+                }
         except:
             continue
     
@@ -267,12 +274,19 @@ def get_available_seasons():
         try:
             filename = os.path.basename(file)  # Get just the filename, not the full path
             year = filename.replace("Zomer ", "").replace(".xlsx", "")
-            seasons.append({
-                "label": f"Zomer {year}",
-                "value": file  # Keep full path for loading
-            })
+            
+            # Prioritize persistent data directory over current directory
+            if filename not in file_versions or file.startswith(data_dir):
+                file_versions[filename] = {
+                    "label": f"Zomer {year}",
+                    "value": file,  # Keep full path for loading
+                    "year": year
+                }
         except:
             continue
+    
+    # Convert dictionary values to list
+    seasons = list(file_versions.values())
     
     # Sort by filename for consistent ordering
     seasons.sort(key=lambda x: os.path.basename(x["value"]))
@@ -297,15 +311,15 @@ def get_current_season_filename():
             end_year = year
         filename = f'Globaal {start_year}-{end_year}.xlsx'
     
-    # Check if file exists in current directory first, then in persistent data directory
-    if os.path.exists(filename):
-        return filename
-    
-    # If not in current directory, check persistent data directory
+    # PRIORITY: Check persistent data directory first (most up-to-date)
     data_dir = get_persistent_data_dir()
     persistent_path = os.path.join(data_dir, filename)
     if os.path.exists(persistent_path):
         return persistent_path
+    
+    # Fall back to current directory
+    if os.path.exists(filename):
+        return filename
     
     # If file doesn't exist anywhere, return the persistent path for new uploads
     return persistent_path
@@ -377,13 +391,24 @@ def load_current_data():
     
     current_filename = get_current_season_filename()
     
-    # Check if current season file exists, otherwise fall back to first available or Globaal.xlsx
-    if os.path.exists(current_filename):
+    # PRIORITY: Always check persistent data directory first for current season
+    data_dir = get_persistent_data_dir()
+    current_season_name = os.path.basename(current_filename)
+    persistent_path = os.path.join(data_dir, current_season_name)
+    
+    if os.path.exists(persistent_path):
+        # Use the persistent data directory version (most up-to-date)
+        filename = persistent_path
+        current_filename = persistent_path
+    elif os.path.exists(current_filename):
+        # Fall back to current directory
         filename = current_filename
     elif available_seasons:
+        # Fall back to first available season
         filename = available_seasons[0]["value"]
         current_filename = filename
     elif os.path.exists("Globaal.xlsx"):
+        # Final fallback
         filename = "Globaal.xlsx"
         current_filename = "Globaal.xlsx"
     else:
@@ -1480,28 +1505,47 @@ def process_upload(date, contents, filename):
     season_filename = get_season_filename(date_str)
     
     # Check for duplicates and assign volgnummer
-    # First check if file exists in current directory (for existing files)
+    # Load and merge data from both locations to ensure we have all games
     filename_only = os.path.basename(season_filename)
     current_dir_file = filename_only
     persistent_file = season_filename
     
-    # Try to load existing data from either location
+    # Try to load existing data from both locations and merge them
     df_season = None
-    existing_file_path = None
+    df_current = None
+    df_persistent = None
     
+    # Load from current directory
     if os.path.exists(current_dir_file):
         try:
-            df_season = pd.read_excel(current_dir_file, sheet_name='Globaal')
-            existing_file_path = current_dir_file
+            df_current = pd.read_excel(current_dir_file, sheet_name='Globaal')
+            print(f"Loaded {len(df_current)} rows from current directory")
         except Exception as e:
             print(f"Error reading from current directory: {e}")
     
-    if df_season is None and os.path.exists(persistent_file):
+    # Load from persistent directory
+    if os.path.exists(persistent_file):
         try:
-            df_season = pd.read_excel(persistent_file, sheet_name='Globaal')
-            existing_file_path = persistent_file
+            df_persistent = pd.read_excel(persistent_file, sheet_name='Globaal')
+            print(f"Loaded {len(df_persistent)} rows from persistent directory")
         except Exception as e:
-            return f'Fout bij het lezen van {persistent_file}: {e}'
+            print(f"Error reading from persistent directory: {e}")
+    
+    # Merge data from both locations, prioritizing persistent directory for duplicates
+    if df_current is not None and df_persistent is not None:
+        # Combine both dataframes, removing duplicates based on date
+        df_combined = pd.concat([df_current, df_persistent], ignore_index=True)
+        # Remove duplicates based on date, keeping the last occurrence (from persistent)
+        df_season = df_combined.drop_duplicates(subset=['Datum'], keep='last')
+        print(f"Merged data: {len(df_season)} rows after removing duplicates")
+    elif df_current is not None:
+        df_season = df_current
+        print(f"Using current directory data: {len(df_season)} rows")
+    elif df_persistent is not None:
+        df_season = df_persistent
+        print(f"Using persistent directory data: {len(df_season)} rows")
+    
+    existing_file_path = persistent_file  # Always use persistent as the target
     
     if df_season is not None:
         # Check if this date already exists
@@ -1533,12 +1577,14 @@ def process_upload(date, contents, filename):
     df_new = assign_smart_game_numbers(df_new)
     
     try:
-        # Always save to persistent location
+        # Always save to persistent location first
         df_new.to_excel(season_filename, sheet_name='Globaal', index=False)
+        print(f"Saved {len(df_new)} rows to persistent location: {season_filename}")
         
-        # If we read from current directory, also update the current directory file
-        if existing_file_path and existing_file_path != season_filename:
-            df_new.to_excel(existing_file_path, sheet_name='Globaal', index=False)
+        # Also update the current directory file to keep them in sync
+        if os.path.exists(current_dir_file) or len(df_new) > 0:
+            df_new.to_excel(current_dir_file, sheet_name='Globaal', index=False)
+            print(f"Also saved to current directory: {current_dir_file}")
             
     except Exception as e:
         return f'Fout bij het opslaan van {season_filename}: {e}'
