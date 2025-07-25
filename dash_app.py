@@ -436,9 +436,6 @@ def load_current_data():
     print(f"Loading data from: {filename}")
     load_data_for_season(filename)
 
-# Load initial data
-load_current_data()
-
 # Test Render.com storage on startup
 def test_render_storage():
     """Test if Render.com storage is working"""
@@ -504,6 +501,9 @@ def sync_existing_data_to_persistent():
 
 # Sync data on startup
 sync_existing_data_to_persistent()
+
+# Load initial data (AFTER syncing)
+load_current_data()
 
 # Member management functions
 def load_member_data():
