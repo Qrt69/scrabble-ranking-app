@@ -6,7 +6,7 @@ import tools
 import importlib
 import plotly.express as px
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import base64
 import io
 import glob
@@ -19,6 +19,21 @@ from dash.dash_table.Format import Format, Scheme
 from dash.dependencies import ALL
 
 importlib.reload(tools)
+
+def get_persistent_data_dir():
+    """Get the persistent data directory for storing uploaded files"""
+    # On Render.com, use /opt/render/project/src/data
+    # Locally, use ./data
+    if os.environ.get("RENDER"):
+        # We're on Render
+        data_dir = "/opt/render/project/src/data"
+    else:
+        # We're running locally
+        data_dir = "./data"
+    
+    # Create the directory if it doesn't exist
+    os.makedirs(data_dir, exist_ok=True)
+    return data_dir
 
 def sync_pdf_files():
     """Sync PDF files from Wedstrijdverslagen to assets/Wedstrijdverslagen"""
@@ -144,26 +159,38 @@ def get_available_pdf_reports():
     """Scan Wedstrijdverslagen folder and return mapping of dates to PDF files"""
     pdf_mapping = {}
     
-    if not os.path.exists("Wedstrijdverslagen"):
-        return pdf_mapping
+    # Get persistent data directory
+    data_dir = get_persistent_data_dir()
     
-    for filename in os.listdir("Wedstrijdverslagen"):
-        if filename.endswith('.pdf'):
-            # Parse filename like "zomerwedstrijd 1 van 3-7-25.pdf"
-            try:
-                # Extract date part after "van "
-                if "van " in filename:
-                    date_part = filename.split("van ")[1].replace('.pdf', '')
-                    # Convert to DD/MM/YYYY format
-                    if '-' in date_part:
-                        day, month, year = date_part.split('-')
-                        # Add 20 prefix to year if it's 2 digits
-                        if len(year) == 2:
-                            year = '20' + year
-                        date_str = f"{day.zfill(2)}/{month.zfill(2)}/{year}"
-                        pdf_mapping[date_str] = filename
-            except Exception as e:
-                continue
+    # Check both current directory and persistent data directory
+    pdf_dirs = ["Wedstrijdverslagen"]
+    persistent_pdf_dir = os.path.join(data_dir, "Wedstrijdverslagen")
+    if os.path.exists(persistent_pdf_dir):
+        pdf_dirs.append(persistent_pdf_dir)
+    
+    for pdf_dir in pdf_dirs:
+        if not os.path.exists(pdf_dir):
+            continue
+        
+        for filename in os.listdir(pdf_dir):
+            if filename.endswith('.pdf'):
+                # Parse filename like "zomerwedstrijd 1 van 3-7-25.pdf"
+                try:
+                    # Extract date part after "van "
+                    if "van " in filename:
+                        date_part = filename.split("van ")[1].replace('.pdf', '')
+                        # Convert to DD/MM/YYYY format
+                        if '-' in date_part:
+                            day, month, year = date_part.split('-')
+                            # Add 20 prefix to year if it's 2 digits
+                            if len(year) == 2:
+                                year = '20' + year
+                            date_str = f"{day.zfill(2)}/{month.zfill(2)}/{year}"
+                            # Use full path for the filename
+                            full_path = os.path.join(pdf_dir, filename)
+                            pdf_mapping[date_str] = full_path
+                except Exception as e:
+                    continue
     
     return pdf_mapping
 
@@ -217,33 +244,38 @@ def get_available_seasons():
     """Get list of available season files"""
     seasons = []
     
-    # Look for regular season files (Globaal YYYY-YYYY.xlsx)
-    globaal_files = glob.glob("Globaal *.xlsx")
+    # Get persistent data directory
+    data_dir = get_persistent_data_dir()
+    
+    # Look for regular season files (Globaal YYYY-YYYY.xlsx) in both current dir and data dir
+    globaal_files = glob.glob("Globaal *.xlsx") + glob.glob(os.path.join(data_dir, "Globaal *.xlsx"))
     for file in globaal_files:
         # Extract year range from filename
         try:
-            year_range = file.replace("Globaal ", "").replace(".xlsx", "")
+            filename = os.path.basename(file)  # Get just the filename, not the full path
+            year_range = filename.replace("Globaal ", "").replace(".xlsx", "")
             seasons.append({
                 "label": f"Seizoen {year_range}",
-                "value": file
+                "value": file  # Keep full path for loading
             })
         except:
             continue
     
-    # Look for summer files (Zomer YYYY.xlsx)
-    zomer_files = glob.glob("Zomer *.xlsx")
+    # Look for summer files (Zomer YYYY.xlsx) in both current dir and data dir
+    zomer_files = glob.glob("Zomer *.xlsx") + glob.glob(os.path.join(data_dir, "Zomer *.xlsx"))
     for file in zomer_files:
         try:
-            year = file.replace("Zomer ", "").replace(".xlsx", "")
+            filename = os.path.basename(file)  # Get just the filename, not the full path
+            year = filename.replace("Zomer ", "").replace(".xlsx", "")
             seasons.append({
                 "label": f"Zomer {year}",
-                "value": file
+                "value": file  # Keep full path for loading
             })
         except:
             continue
     
     # Sort by filename for consistent ordering
-    seasons.sort(key=lambda x: x["value"])
+    seasons.sort(key=lambda x: os.path.basename(x["value"]))
     return seasons
 
 def get_current_season_filename():
@@ -254,7 +286,7 @@ def get_current_season_filename():
     
     if month in [7, 8]:
         # Summer competition
-        return f'Zomer {year}.xlsx'
+        filename = f'Zomer {year}.xlsx'
     else:
         # Regular season: September (9) to June (6)
         if month >= 9:
@@ -263,7 +295,20 @@ def get_current_season_filename():
         else:
             start_year = year - 1
             end_year = year
-        return f'Globaal {start_year}-{end_year}.xlsx'
+        filename = f'Globaal {start_year}-{end_year}.xlsx'
+    
+    # Check if file exists in current directory first, then in persistent data directory
+    if os.path.exists(filename):
+        return filename
+    
+    # If not in current directory, check persistent data directory
+    data_dir = get_persistent_data_dir()
+    persistent_path = os.path.join(data_dir, filename)
+    if os.path.exists(persistent_path):
+        return persistent_path
+    
+    # If file doesn't exist anywhere, return the persistent path for new uploads
+    return persistent_path
 
 def load_data_for_season(filename):
     """Load data from a specific season file"""
@@ -783,7 +828,7 @@ def get_season_filename(date_str):
     month = dt.month
     if month in [7, 8]:
         # Summer competition
-        return f'Zomer {year}.xlsx'
+        filename = f'Zomer {year}.xlsx'
     else:
         # Regular season: September (9) to June (6)
         if month >= 9:
@@ -792,7 +837,11 @@ def get_season_filename(date_str):
         else:
             start_year = year - 1
             end_year = year
-        return f'Globaal {start_year}-{end_year}.xlsx'
+        filename = f'Globaal {start_year}-{end_year}.xlsx'
+    
+    # Use persistent data directory for saving uploaded files
+    data_dir = get_persistent_data_dir()
+    return os.path.join(data_dir, filename)
 
 app = dash.Dash(__name__, external_stylesheets=[
     dbc.themes.BOOTSTRAP,
@@ -1592,12 +1641,15 @@ def process_pdf_upload(n_clicks, contents, filename):
         content_type, content_string = contents.split(',')
         decoded = base64.b64decode(content_string)
         
+        # Get persistent data directory
+        data_dir = get_persistent_data_dir()
+        
         # Ensure assets directory exists
         assets_dir = "assets/Wedstrijdverslagen"
         if not os.path.exists(assets_dir):
             os.makedirs(assets_dir)
         
-        # Save file
+        # Save file to assets (for immediate access)
         pdf_path = os.path.join(assets_dir, filename_new)
         print(f"Saving to assets: {pdf_path}")
         with open(pdf_path, 'wb') as f:
@@ -1613,11 +1665,23 @@ def process_pdf_upload(n_clicks, contents, filename):
         with open(main_pdf_path, 'wb') as f:
             f.write(decoded)
         
+        # Save to persistent data directory for long-term storage
+        persistent_pdf_dir = os.path.join(data_dir, "Wedstrijdverslagen")
+        if not os.path.exists(persistent_pdf_dir):
+            os.makedirs(persistent_pdf_dir)
+        
+        persistent_pdf_path = os.path.join(persistent_pdf_dir, filename_new)
+        print(f"Saving to persistent: {persistent_pdf_path}")
+        with open(persistent_pdf_path, 'wb') as f:
+            f.write(decoded)
+        
         # Verify files were saved correctly
         if not os.path.exists(pdf_path):
             return f'❌ Fout: PDF kon niet worden opgeslagen in assets folder'
         if not os.path.exists(main_pdf_path):
             return f'❌ Fout: PDF kon niet worden opgeslagen in hoofdmap'
+        if not os.path.exists(persistent_pdf_path):
+            return f'❌ Fout: PDF kon niet worden opgeslagen in persistente map'
         
         # Note: PDF mapping will be refreshed on next app load
         print("PDF files saved successfully")
@@ -1666,6 +1730,14 @@ def delete_game(n_clicks, game_nr):
         # Save updated file
         if current_filename:
             df_updated.to_excel(current_filename, sheet_name='Globaal', index=False)
+            
+            # Also save to persistent data directory if not already there
+            data_dir = get_persistent_data_dir()
+            filename_only = os.path.basename(current_filename)
+            persistent_path = os.path.join(data_dir, filename_only)
+            
+            if current_filename != persistent_path:
+                df_updated.to_excel(persistent_path, sheet_name='Globaal', index=False)
         else:
             return 'Geen bestand geselecteerd voor opslag.', None, []
         
@@ -1718,15 +1790,29 @@ def handle_game_pdf_selection(selected_date):
     pdf_mapping = get_available_pdf_reports()
     
     if selected_date in pdf_mapping:
-        pdf_filename = pdf_mapping[selected_date]
-        pdf_path = f"Wedstrijdverslagen/{pdf_filename}"
+        pdf_full_path = pdf_mapping[selected_date]
+        pdf_filename = os.path.basename(pdf_full_path)
         
-        if os.path.exists(pdf_path):
+        # Check if file exists
+        if os.path.exists(pdf_full_path):
+            # Determine the correct path for the iframe
+            # If it's in the persistent data directory, we need to copy it to assets for web access
+            if "assets" not in pdf_full_path:
+                # Copy to assets if not already there
+                assets_pdf_path = f"assets/Wedstrijdverslagen/{pdf_filename}"
+                if not os.path.exists(assets_pdf_path):
+                    import shutil
+                    os.makedirs("assets/Wedstrijdverslagen", exist_ok=True)
+                    shutil.copy2(pdf_full_path, assets_pdf_path)
+                iframe_src = f"/assets/Wedstrijdverslagen/{pdf_filename}"
+            else:
+                iframe_src = f"/assets/Wedstrijdverslagen/{pdf_filename}"
+            
             # Create a download link for the PDF
             return html.Div([
                 html.H5(f"Wedstrijdverslag voor {selected_date}", className="mb-3"),
                 html.Iframe(
-                    src=f"/assets/Wedstrijdverslagen/{pdf_filename}",
+                    src=iframe_src,
                     width="100%",
                     height="600px",
                     style={"border": "1px solid #ddd", "borderRadius": "5px"}
@@ -1737,7 +1823,7 @@ def handle_game_pdf_selection(selected_date):
         else:
             return html.Div([
                 html.H5(f"Wedstrijd {selected_date}", className="mb-3"),
-                html.P(f"PDF bestand niet gevonden: {pdf_path}", className="text-danger")
+                html.P(f"PDF bestand niet gevonden: {pdf_full_path}", className="text-danger")
             ])
     else:
         return html.Div([
