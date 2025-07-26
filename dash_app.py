@@ -358,20 +358,31 @@ def load_member_data():
         except Exception as e:
             print(f"Error loading members.json: {e}")
     
-    # If JSON doesn't exist, create from Excel file
-    if os.path.exists("Info.xlsx"):
-        try:
-            df_leden = pd.read_excel("Info.xlsx", sheet_name="Leden")
-            df_leden.rename(columns={'NAAM': 'Naam'}, inplace=True)
-            
-            # Save to JSON for future use
-            save_member_data(df_leden)
-            return df_leden
-        except Exception as e:
-            print(f"Error loading from Info.xlsx: {e}")
-    
-    # Return empty DataFrame if no data available
-    return pd.DataFrame(columns=['Naam', 'CLUB', 'KLASSE'])
+    # If JSON doesn't exist, create sample data
+    print("No members.json found - creating sample data")
+    sample_members = [
+        {'Naam': 'TORREELE Ronald', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'VANDENBERGHE Riet', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'FARASYN Kurt', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'DEWILDE Marc', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'VANDEWALLE Patrick', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'VANDEWALLE Dirk', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'VANDEWALLE Geert', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'VANDEWALLE Koen', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'VANDEWALLE Luc', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'VANDEWALLE Marc', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'VANDEWALLE Peter', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'VANDEWALLE Rik', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'VANDEWALLE Stefaan', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'VANDEWALLE Tom', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'VANDEWALLE Wim', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'VANDEWALLE Yves', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'VANDEWALLE Zeger', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
+        {'Naam': 'VANDEWALLE Zeger', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'}
+    ]
+    df_leden = pd.DataFrame(sample_members)
+    save_member_data(df_leden)
+    return df_leden
 
 def save_member_data(df):
     """Save member data to JSON file"""
@@ -1394,12 +1405,30 @@ def process_upload(date, contents, filename):
     except Exception as e:
         return f'Fout bij het lezen van het CSV-bestand: {e}'
     
-    # Read supporting Excel file for leden
-    try:
-        df_leden = pd.read_excel('Info.xlsx', sheet_name='Leden')
-        df_leden.rename(columns={'NAAM': 'Naam'}, inplace=True)
-    except Exception as e:
-        return f'Fout bij het lezen van Info.xlsx: {e}'
+    # Get the current member data (from the editable table)
+    global current_member_data
+    if current_member_data is not None:
+        df_leden = pd.DataFrame(current_member_data)
+        print(f"Using current member table data: {len(df_leden)} members")
+    else:
+        df_leden = load_member_data()
+        print(f"Using loaded member data: {len(df_leden)} members")
+    
+    # Extract player names from the uploaded CSV to validate against member data
+    player_columns = [col for col in df.columns if col.startswith('P') and col[1:].isdigit()]
+    if player_columns:
+        players_in_csv = []
+        for col in player_columns:
+            players_in_csv.extend(df[col].dropna().unique())
+        unique_players_in_csv = list(set(players_in_csv))
+        print(f"Players found in uploaded CSV: {unique_players_in_csv}")
+        
+        # Check if all players exist in member data
+        member_names = df_leden['Naam'].tolist()
+        missing_players = [p for p in unique_players_in_csv if p not in member_names]
+        if missing_players:
+            print(f"Warning: Players not found in member data: {missing_players}")
+            print("These players will be processed with default club/class info")
     
     # Always determine the season filename based on the uploaded date
     season_filename = get_season_filename(date_str)
