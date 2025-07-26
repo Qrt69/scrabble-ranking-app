@@ -1433,21 +1433,43 @@ def process_upload(date, contents, filename):
     # Always determine the season filename based on the uploaded date
     season_filename = get_season_filename(date_str)
     
+    # Get the persistent data directory and create the full path
+    data_dir = get_persistent_data_dir()
+    persistent_season_path = os.path.join(data_dir, season_filename)
+    
+    print(f"Upload processing for date: {date_str}")
+    print(f"Season filename: {season_filename}")
+    print(f"Persistent path: {persistent_season_path}")
+    
     # Check for duplicates and assign volgnummer
-    if os.path.exists(season_filename):
+    # First check persistent storage, then fall back to current directory
+    if os.path.exists(persistent_season_path):
+        season_file_to_check = persistent_season_path
+        print(f"✓ Found existing file in persistent storage: {persistent_season_path}")
+    elif os.path.exists(season_filename):
+        season_file_to_check = season_filename
+        print(f"✓ Found existing file in current directory: {season_filename}")
+    else:
+        season_file_to_check = None
+        print(f"✓ No existing file found - will create new file in persistent storage")
+    
+    if season_file_to_check:
         try:
-            df_season = pd.read_excel(season_filename, sheet_name='Globaal')
+            df_season = pd.read_excel(season_file_to_check, sheet_name='Globaal')
+            print(f"✓ Successfully loaded existing data from: {season_file_to_check}")
         except Exception as e:
-            return f'Fout bij het lezen van {season_filename}: {e}'
+            return f'Fout bij het lezen van {season_file_to_check}: {e}'
         # Check if this date already exists
         if (df_season['Datum'] == date_str).any():
             return f'Deze uitslag voor {date_str} werd al ingelezen in {season_filename}.'
         # Assign volgnummer as one more than the number of unique dates (sorted chronologically)
         unique_dates = sorted(pd.to_datetime(df_season['Datum'], dayfirst=True).unique())
         volgnummer = len(unique_dates) + 1
+        print(f"✓ Assigned volgnummer: {volgnummer}")
     else:
         df_season = None
         volgnummer = 1
+        print(f"✓ New file - assigned volgnummer: {volgnummer}")
     
     # Prepare row_wedstrijdinfo
     row_wedstrijdinfo = {'Datum': date_str, 'Beurten': len([col for col in df.columns if col.startswith('B') and col[1:].isdigit()])}
@@ -1468,10 +1490,19 @@ def process_upload(date, contents, filename):
     df_new['Datum_dt'] = pd.to_datetime(df_new['Datum'], dayfirst=True)
     df_new = assign_smart_game_numbers(df_new)
     
+    # ALWAYS save to persistent storage
+    try:
+        df_new.to_excel(persistent_season_path, sheet_name='Globaal', index=False)
+        print(f"✓ Successfully saved to persistent storage: {persistent_season_path}")
+    except Exception as e:
+        return f'Fout bij het opslaan van {persistent_season_path}: {e}'
+    
+    # Also save to current directory to keep them in sync
     try:
         df_new.to_excel(season_filename, sheet_name='Globaal', index=False)
+        print(f"✓ Also saved to current directory: {season_filename}")
     except Exception as e:
-        return f'Fout bij het opslaan van {season_filename}: {e}'
+        print(f"Warning: Could not save to current directory: {e}")
     
     # Reload data
     load_current_data()
@@ -1639,9 +1670,19 @@ def delete_game(n_clicks, game_nr):
         df_updated['Datum_dt'] = pd.to_datetime(df_updated['Datum'], dayfirst=True)
         df_updated = assign_smart_game_numbers(df_updated)
         
-        # Save updated file
+        # Save updated file to persistent storage
         if current_filename:
+            # Get the persistent data directory
+            data_dir = get_persistent_data_dir()
+            persistent_filename = os.path.join(data_dir, os.path.basename(current_filename))
+            
+            # Save to persistent storage
+            df_updated.to_excel(persistent_filename, sheet_name='Globaal', index=False)
+            print(f"✓ Saved updated file to persistent storage: {persistent_filename}")
+            
+            # Also save to current directory to keep them in sync
             df_updated.to_excel(current_filename, sheet_name='Globaal', index=False)
+            print(f"✓ Also saved to current directory: {current_filename}")
         else:
             return 'Geen bestand geselecteerd voor opslag.', None, []
         
