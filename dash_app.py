@@ -207,33 +207,47 @@ def get_available_seasons():
     """Get list of available season files"""
     seasons = []
     
+    print("=== Scanning for Excel files ===")
+    
+    # List all files in current directory
+    all_files = os.listdir('.')
+    excel_files = [f for f in all_files if f.endswith('.xlsx')]
+    print(f"All Excel files found: {excel_files}")
+    
     # Look for regular season files (Globaal YYYY-YYYY.xlsx)
     globaal_files = glob.glob("Globaal *.xlsx")
+    print(f"Globaal files found: {globaal_files}")
     for file in globaal_files:
-        # Extract year range from filename
+        # Extract year range from filename (handle extra spaces)
         try:
-            year_range = file.replace("Globaal ", "").replace(".xlsx", "")
+            year_range = file.replace("Globaal ", "").replace(".xlsx", "").strip()
             seasons.append({
                 "label": f"Seizoen {year_range}",
                 "value": file
             })
-        except:
+            print(f"Added season: {file}")
+        except Exception as e:
+            print(f"Error processing {file}: {e}")
             continue
     
     # Look for summer files (Zomer YYYY.xlsx)
     zomer_files = glob.glob("Zomer *.xlsx")
+    print(f"Zomer files found: {zomer_files}")
     for file in zomer_files:
         try:
-            year = file.replace("Zomer ", "").replace(".xlsx", "")
+            year = file.replace("Zomer ", "").replace(".xlsx", "").strip()
             seasons.append({
                 "label": f"Zomer {year}",
                 "value": file
             })
-        except:
+            print(f"Added season: {file}")
+        except Exception as e:
+            print(f"Error processing {file}: {e}")
             continue
     
     # Sort by filename for consistent ordering
     seasons.sort(key=lambda x: x["value"])
+    print(f"Final seasons list: {[s['value'] for s in seasons]}")
     return seasons
 
 def get_current_season_filename():
@@ -259,7 +273,11 @@ def load_data_for_season(filename):
     """Load data from a specific season file"""
     global df_global, df_gen_info, df_pct_final, df_rp_final, df_pts_final
     
+    print(f"=== Loading data from {filename} ===")
+    print(f"File exists: {os.path.exists(filename)}")
+    
     if not os.path.exists(filename):
+        print(f"✗ File not found: {filename}")
         # No data available
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
@@ -317,22 +335,30 @@ def load_current_data():
     """Load data from the current season file"""
     global df_global, df_gen_info, df_pct_final, df_rp_final, df_pts_final, current_filename, available_seasons
     
+    print("=== Loading Current Data ===")
+    
     # Get available seasons
     available_seasons = get_available_seasons()
+    print(f"Available seasons: {[s['value'] for s in available_seasons]}")
     
     current_filename = get_current_season_filename()
+    print(f"Current season filename: {current_filename}")
     
     # Check if current season file exists, otherwise fall back to first available or Globaal.xlsx
     if os.path.exists(current_filename):
         filename = current_filename
+        print(f"✓ Found current season file: {filename}")
     elif available_seasons:
         filename = available_seasons[0]["value"]
         current_filename = filename
+        print(f"✓ Using first available season: {filename}")
     elif os.path.exists("Globaal.xlsx"):
         filename = "Globaal.xlsx"
         current_filename = "Globaal.xlsx"
+        print(f"✓ Using fallback Globaal.xlsx")
     else:
         # No data available
+        print("✗ No data files found")
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
         df_pct_final = pd.DataFrame()
@@ -340,6 +366,7 @@ def load_current_data():
         df_pts_final = pd.DataFrame()
         return
     
+    print(f"Loading data from: {filename}")
     load_data_for_season(filename)
 
 # Load initial data
