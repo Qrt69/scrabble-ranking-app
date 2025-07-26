@@ -567,6 +567,7 @@ def get_available_seasons_from_dropbox():
 
 # Test Dropbox connection (disabled for now)
 # dropbox_available = test_dropbox_connection()
+dropbox_available = False  # Set to False since Dropbox is disabled
 print("Dropbox temporarily disabled - using local storage only")
 
 # Load initial data
@@ -1671,18 +1672,24 @@ def process_upload(date, contents, filename):
     # Always determine the season name based on the uploaded date
     season_name = get_season_filename(date_str).replace('.xlsx', '')
     
-    # Check for duplicates and assign volgnummer
-    df_season = load_game_data(season_name)
-    if df_season is not None:
-        # Check if this date already exists
-        if (df_season['Datum'] == date_str).any():
-            return f'Deze uitslag voor {date_str} werd al ingelezen in {season_name}.'
-        # Assign volgnummer as one more than the number of unique dates (sorted chronologically)
-        unique_dates = sorted(pd.to_datetime(df_season['Datum'], dayfirst=True).unique())
-        volgnummer = len(unique_dates) + 1
-    else:
-        df_season = None
-        volgnummer = 1
+    # Check for duplicates and assign volgnummer (load from local file)
+    local_filename = f"{season_name}.xlsx"
+    df_season = None
+    volgnummer = 1
+    
+    if os.path.exists(local_filename):
+        try:
+            df_season = pd.read_excel(local_filename, sheet_name='Globaal')
+            # Check if this date already exists
+            if (df_season['Datum'] == date_str).any():
+                return f'Deze uitslag voor {date_str} werd al ingelezen in {season_name}.'
+            # Assign volgnummer as one more than the number of unique dates (sorted chronologically)
+            unique_dates = sorted(pd.to_datetime(df_season['Datum'], dayfirst=True).unique())
+            volgnummer = len(unique_dates) + 1
+        except Exception as e:
+            print(f"Error loading local file {local_filename}: {e}")
+            df_season = None
+            volgnummer = 1
     
     # Prepare row_wedstrijdinfo
     row_wedstrijdinfo = {'Datum': date_str, 'Beurten': len([col for col in df.columns if col.startswith('B') and col[1:].isdigit()])}
