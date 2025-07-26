@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 from numpy.ma.extras import row_stack
-from setuptools.command.bdist_egg import walk_egg
 
 # General settings
 pd.options.display.float_format = '{:.2f}'.format
@@ -198,7 +197,13 @@ def make_pivot(dfp, pindex, pcols, pvalues, force_int=False, fill_blank=True):
 
 
 def process_final_df(df_global, pivot_df, columns, sort_by):
-    df_for_processing = df_global[columns]
+    # Only select columns that actually exist in df_global
+    available_columns = [col for col in columns if col in df_global.columns]
+    if not available_columns:
+        # If no columns are available, return empty DataFrame
+        return pd.DataFrame()
+    
+    df_for_processing = df_global[available_columns]
     result = (pd.merge(df_for_processing, pivot_df, on='Naam', how='left')
               .sort_values(by=sort_by, ascending=False)
               .reset_index(drop=True)
