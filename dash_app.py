@@ -20,6 +20,24 @@ from dash.dependencies import ALL
 
 importlib.reload(tools)
 
+# -------------------------------------------------------------------------
+# Persistent data handling
+# -------------------------------------------------------------------------
+def get_persistent_data_dir():
+    """
+    Return the directory used for persistent storage. On Render.com the
+    persistent disk is mounted at `/opt/render/project/src/data`. If that
+    directory does not exist (e.g. locally), fall back to a local `data`
+    directory. The directory is created if it does not exist.
+    """
+    # Default to Render's persistent disk mount point
+    data_dir = "/opt/render/project/src/data"
+    # Fallback to local data directory if the persistent mount is not present
+    if not os.path.isdir(data_dir):
+        data_dir = "./data"
+    os.makedirs(data_dir, exist_ok=True)
+    return data_dir
+
 def sync_pdf_files():
     """Sync PDF files from Wedstrijdverslagen to assets/Wedstrijdverslagen"""
     import shutil
@@ -206,30 +224,39 @@ def get_summer_highlighting_data():
 def get_available_seasons():
     """Get list of available season files"""
     seasons = []
-    
-    # Look for regular season files (Globaal YYYY-YYYY.xlsx)
-    globaal_files = glob.glob("Globaal *.xlsx")
-    for file in globaal_files:
+    # Get the persistent data directory to look for files
+    data_dir = get_persistent_data_dir()
+
+    # Look for regular season files (Globaal YYYY-YYYY.xlsx) both in persistent storage and current directory
+    persistent_globaal_files = glob.glob(os.path.join(data_dir, "Globaal *.xlsx"))
+    current_globaal_files = glob.glob("Globaal *.xlsx")
+    all_globaal_files = list(set(persistent_globaal_files + current_globaal_files))
+
+    for file in all_globaal_files:
         # Extract year range from filename
         try:
-            year_range = file.replace("Globaal ", "").replace(".xlsx", "")
+            filename = os.path.basename(file)
+            year_range = filename.replace("Globaal ", "").replace(".xlsx", "")
             seasons.append({
                 "label": f"Seizoen {year_range}",
                 "value": file
             })
-        except:
+        except Exception:
             continue
     
-    # Look for summer files (Zomer YYYY.xlsx)
-    zomer_files = glob.glob("Zomer *.xlsx")
-    for file in zomer_files:
+    # Look for summer files (Zomer YYYY.xlsx) both in persistent storage and current directory
+    persistent_zomer_files = glob.glob(os.path.join(data_dir, "Zomer *.xlsx"))
+    current_zomer_files = glob.glob("Zomer *.xlsx")
+    all_zomer_files = list(set(persistent_zomer_files + current_zomer_files))
+    for file in all_zomer_files:
         try:
-            year = file.replace("Zomer ", "").replace(".xlsx", "")
+            filename = os.path.basename(file)
+            year = filename.replace("Zomer ", "").replace(".xlsx", "")
             seasons.append({
                 "label": f"Zomer {year}",
                 "value": file
             })
-        except:
+        except Exception:
             continue
     
     # Sort by filename for consistent ordering
@@ -322,10 +349,21 @@ def load_current_data():
     
     current_filename = get_current_season_filename()
     
-    # Check if current season file exists, otherwise fall back to first available or Globaal.xlsx
-    if os.path.exists(current_filename):
+    # Always prioritise persistent storage for the current season
+    data_dir = get_persistent_data_dir()
+    # If current_filename is a full path (e.g. chosen from dropdown), just use its basename for lookup
+    base_name = os.path.basename(current_filename) if current_filename else ""
+    persistent_path = os.path.join(data_dir, base_name) if base_name else None
+
+    if persistent_path and os.path.exists(persistent_path):
+        # Use the persistent file if it exists
+        filename = persistent_path
+        current_filename = persistent_path
+    elif os.path.exists(current_filename):
+        # Fall back to local file in current directory
         filename = current_filename
     elif available_seasons:
+        # Use the first available season file from the list
         filename = available_seasons[0]["value"]
         current_filename = filename
     elif os.path.exists("Globaal.xlsx"):
@@ -1432,17 +1470,29 @@ def process_upload(date, contents, filename):
     
     # Always determine the season filename based on the uploaded date
     season_filename = get_season_filename(date_str)
-    
-    # Check for duplicates and assign volgnummer
-    if os.path.exists(season_filename):
+    # Build the path to the persistent storage
+    data_dir = get_persistent_data_dir()
+    persistent_season_path = os.path.join(data_dir, os.path.basename(season_filename))
+    # Check for duplicates and assign volgnummer, prioritising the persistent file
+    if os.path.exists(persistent_season_path):
+        try:
+            df_season = pd.read_excel(persistent_season_path, sheet_name='Globaal')
+        except Exception as e:
+            return f'Fout bij het lezen van {persistent_season_path}: {e}'
+        # Check if this date already exists
+        if (df_season['Datum'] == date_str).any():
+            return f'Deze uitslag voor {date_str} werd al ingelezen in {os.path.basename(season_filename)}.'
+        # Assign volgnummer as one more than the number of unique dates (sorted chronologically)
+        unique_dates = sorted(pd.to_datetime(df_season['Datum'], dayfirst=True).unique())
+        volgnummer = len(unique_dates) + 1
+    elif os.path.exists(season_filename):
+        # Fall back to local file if the persistent one doesn't exist yet
         try:
             df_season = pd.read_excel(season_filename, sheet_name='Globaal')
         except Exception as e:
             return f'Fout bij het lezen van {season_filename}: {e}'
-        # Check if this date already exists
         if (df_season['Datum'] == date_str).any():
             return f'Deze uitslag voor {date_str} werd al ingelezen in {season_filename}.'
-        # Assign volgnummer as one more than the number of unique dates (sorted chronologically)
         unique_dates = sorted(pd.to_datetime(df_season['Datum'], dayfirst=True).unique())
         volgnummer = len(unique_dates) + 1
     else:
@@ -1468,18 +1518,22 @@ def process_upload(date, contents, filename):
     df_new['Datum_dt'] = pd.to_datetime(df_new['Datum'], dayfirst=True)
     df_new = assign_smart_game_numbers(df_new)
     
+    # Save the updated data to the persistent storage. Also write to the local file
     try:
+        # Always write to the persistent path first
+        df_new.to_excel(persistent_season_path, sheet_name='Globaal', index=False)
+        # Also keep a copy in the current working directory for convenience
         df_new.to_excel(season_filename, sheet_name='Globaal', index=False)
     except Exception as e:
-        return f'Fout bij het opslaan van {season_filename}: {e}'
-    
-    # Reload data
+        return f'Fout bij het opslaan van {os.path.basename(season_filename)}: {e}'
+
+    # Reload data (this will pick up the persistent file on restart)
     load_current_data()
-    
+
     # Get the actual game number that was assigned
     actual_game_nr = df_new[df_new['Datum'] == date_str]['GameNr'].iloc[0]
-    
-    return f'Uitslag voor {date_str} (wedstrijd {actual_game_nr}) succesvol toegevoegd aan {season_filename}!'
+
+    return f'Uitslag voor {date_str} (wedstrijd {actual_game_nr}) succesvol toegevoegd aan {os.path.basename(season_filename)}!'
 
 # PDF Upload Callbacks
 @app.callback(
