@@ -497,7 +497,23 @@ def sync_existing_data_to_persistent():
                 except Exception as e:
                     print(f"✗ Error syncing {filename}: {e}")
             else:
-                print(f"✓ {filename} already exists in persistent storage")
+                # Check if persistent file is newer (has more data)
+                try:
+                    import pandas as pd
+                    current_rows = len(pd.read_excel(filename, sheet_name='Globaal'))
+                    persistent_rows = len(pd.read_excel(persistent_path, sheet_name='Globaal'))
+                    
+                    if persistent_rows >= current_rows:
+                        print(f"✓ {filename} already exists in persistent storage ({persistent_rows} rows)")
+                    else:
+                        # Persistent has less data, copy the current file
+                        import shutil
+                        shutil.copy2(filename, persistent_path)
+                        print(f"✓ Updated {filename} in persistent storage ({current_rows} rows)")
+                except Exception as e:
+                    print(f"✗ Error checking {filename}: {e}")
+                    # Fallback: don't overwrite
+                    print(f"✓ Keeping existing {filename} in persistent storage")
 
 # Sync data on startup
 sync_existing_data_to_persistent()
@@ -1560,7 +1576,13 @@ def handle_csv_upload(contents, filename):
     [State('upload-csv', 'contents'), State('upload-csv', 'filename')]
 )
 def process_upload(date, contents, filename):
+    print(f"=== UPLOAD CALLBACK TRIGGERED ===")
+    print(f"Date: {date}")
+    print(f"Filename: {filename}")
+    print(f"Contents: {'Present' if contents else 'None'}")
+    
     if not date or not contents:
+        print("✗ Missing date or contents")
         return ''
     
     # Convert date from ISO to DD/MM/YYYY
