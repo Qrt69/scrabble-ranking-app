@@ -102,17 +102,14 @@ def list_dropbox_files():
         result = dbx.files_list_folder(DROPBOX_FOLDER)
         return [entry.name for entry in result.entries]
     except dropbox.exceptions.ApiError as e:
-        if e.error.is_not_found():
-            # Folder doesn't exist yet, create it
-            try:
-                dbx.files_create_folder_v2(DROPBOX_FOLDER)
-                print(f"✓ Created Dropbox folder: {DROPBOX_FOLDER}")
-                return []
-            except Exception as e2:
-                print(f"✗ Error creating Dropbox folder: {e2}")
-                return []
-        else:
-            print(f"✗ Error listing Dropbox files: {e}")
+        # If listing fails, try to create the folder and return empty list
+        print(f"Dropbox folder not found, attempting to create: {DROPBOX_FOLDER}")
+        try:
+            dbx.files_create_folder_v2(DROPBOX_FOLDER)
+            print(f"✓ Created Dropbox folder: {DROPBOX_FOLDER}")
+            return []
+        except Exception as e2:
+            print(f"✗ Error creating Dropbox folder: {e2}")
             return []
     except Exception as e:
         print(f"✗ Error listing Dropbox files: {e}")
@@ -417,13 +414,21 @@ def load_current_data():
     
     print("=== Loading Current Data ===")
     
-    # Get available seasons from Dropbox first
-    dropbox_seasons = get_available_seasons_from_dropbox()
-    print(f"Dropbox seasons: {[s['label'] for s in dropbox_seasons]}")
+    try:
+        # Get available seasons from Dropbox first
+        dropbox_seasons = get_available_seasons_from_dropbox()
+        print(f"Dropbox seasons: {[s['label'] for s in dropbox_seasons]}")
+    except Exception as e:
+        print(f"Error getting Dropbox seasons: {e}")
+        dropbox_seasons = []
     
     # Also get local seasons as fallback
-    local_seasons = get_available_seasons()
-    print(f"Local seasons: {[s['label'] for s in local_seasons]}")
+    try:
+        local_seasons = get_available_seasons()
+        print(f"Local seasons: {[s['label'] for s in local_seasons]}")
+    except Exception as e:
+        print(f"Error getting local seasons: {e}")
+        local_seasons = []
     
     # Combine seasons, prioritizing Dropbox
     available_seasons = dropbox_seasons + local_seasons
@@ -435,15 +440,18 @@ def load_current_data():
         print(f"Using season: {current_season}")
         
         # Try to load from Dropbox first
-        df_loaded = load_game_data(current_season)
-        if df_loaded is not None:
-            print(f"✓ Loaded {len(df_loaded)} games from Dropbox")
-            df_global = df_loaded
-            # Process the data
-            process_loaded_data(df_global)
-            return
-        else:
-            print("No data found in Dropbox, trying local files...")
+        try:
+            df_loaded = load_game_data(current_season)
+            if df_loaded is not None:
+                print(f"✓ Loaded {len(df_loaded)} games from Dropbox")
+                df_global = df_loaded
+                # Process the data
+                process_loaded_data(df_global)
+                return
+            else:
+                print("No data found in Dropbox, trying local files...")
+        except Exception as e:
+            print(f"Error loading from Dropbox: {e}")
     
     # Fallback to local file loading
     if os.path.exists("Globaal.xlsx"):
@@ -539,38 +547,49 @@ def test_dropbox_connection():
 # Game data storage functions (define before load_current_data)
 def save_game_data(df, season_name):
     """Save game data to Dropbox"""
-    data = df.to_dict('records')
-    filename = f"{season_name.lower().replace(' ', '_')}.json"
-    return save_to_dropbox(data, filename, 'json')
+    try:
+        data = df.to_dict('records')
+        filename = f"{season_name.lower().replace(' ', '_')}.json"
+        return save_to_dropbox(data, filename, 'json')
+    except Exception as e:
+        print(f"Error saving to Dropbox: {e}")
+        return False
 
 def load_game_data(season_name):
     """Load game data from Dropbox"""
-    filename = f"{season_name.lower().replace(' ', '_')}.json"
-    data = load_from_dropbox(filename, 'json')
-    if data:
-        return pd.DataFrame(data)
+    try:
+        filename = f"{season_name.lower().replace(' ', '_')}.json"
+        data = load_from_dropbox(filename, 'json')
+        if data:
+            return pd.DataFrame(data)
+    except Exception as e:
+        print(f"Error loading from Dropbox: {e}")
     return None
 
 def get_available_seasons_from_dropbox():
     """Get list of available seasons from Dropbox"""
-    files = list_dropbox_files()
-    seasons = []
-    
-    for file in files:
-        if file.endswith('.json') and file != 'members.json':
-            # Convert filename back to season name
-            season_name = file.replace('.json', '').replace('_', ' ').title()
-            if 'zomer' in season_name.lower():
-                season_name = season_name.replace('Zomer', 'Zomer')
-            elif 'seizoen' in season_name.lower():
-                season_name = season_name.replace('Seizoen', 'Seizoen')
-            
-            seasons.append({
-                "label": season_name,
-                "value": season_name
-            })
-    
-    return seasons
+    try:
+        files = list_dropbox_files()
+        seasons = []
+        
+        for file in files:
+            if file.endswith('.json') and file != 'members.json':
+                # Convert filename back to season name
+                season_name = file.replace('.json', '').replace('_', ' ').title()
+                if 'zomer' in season_name.lower():
+                    season_name = season_name.replace('Zomer', 'Zomer')
+                elif 'seizoen' in season_name.lower():
+                    season_name = season_name.replace('Seizoen', 'Seizoen')
+                
+                seasons.append({
+                    "label": season_name,
+                    "value": season_name
+                })
+        
+        return seasons
+    except Exception as e:
+        print(f"Error getting seasons from Dropbox: {e}")
+        return []
 
 # Test Dropbox connection
 dropbox_available = test_dropbox_connection()
