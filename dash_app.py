@@ -780,6 +780,21 @@ def make_management_tab():
         html.Div(id="member-management-status", className="mt-3")
     ])
 
+def get_persistent_data_dir():
+    """Get the persistent data directory for storing uploaded files"""
+    # On Render.com, use /opt/render/project/src/data
+    # Locally, use ./data
+    if os.environ.get("RENDER"):
+        # We're on Render
+        data_dir = "/opt/render/project/src/data"
+    else:
+        # We're running locally
+        data_dir = "./data"
+    
+    # Create the directory if it doesn't exist
+    os.makedirs(data_dir, exist_ok=True)
+    return data_dir
+
 def get_season_filename(date_str):
     dt = datetime.strptime(date_str, '%d/%m/%Y')
     year = dt.year
@@ -1384,10 +1399,17 @@ def handle_csv_upload(contents, filename):
 @app.callback(
     Output('upload-status', 'children'),
     [Input('upload-date-picker-visible', 'date')],
-    [State('upload-csv', 'contents'), State('upload-csv', 'filename')]
+    [State('upload-csv', 'contents'), State('upload-csv', 'filename')],
+    prevent_initial_call=True
 )
 def process_upload(date, contents, filename):
+    print(f"=== UPLOAD CALLBACK TRIGGERED ===")
+    print(f"Date: {date}")
+    print(f"Contents: {'Yes' if contents else 'No'}")
+    print(f"Filename: {filename}")
+    
     if not date or not contents:
+        print("Missing date or contents - returning empty")
         return ''
     
     # Convert date from ISO to DD/MM/YYYY
