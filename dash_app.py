@@ -50,6 +50,21 @@ def sync_pdf_files():
 # Sync PDF files on startup
 sync_pdf_files()
 
+def get_persistent_data_dir():
+    """Get the persistent data directory for storing uploaded files"""
+    # On Render.com, use /opt/render/project/src/data
+    # Locally, use ./data
+    if os.environ.get("RENDER"):
+        # We're on Render
+        data_dir = "/opt/render/project/src/data"
+    else:
+        # We're running locally
+        data_dir = "./data"
+    
+    # Create the directory if it doesn't exist
+    os.makedirs(data_dir, exist_ok=True)
+    return data_dir
+
 # Global variables to store current data
 df_global = None
 df_gen_info = None
@@ -828,21 +843,6 @@ def make_management_tab():
         
         html.Div(id="member-management-status", className="mt-3")
     ])
-
-def get_persistent_data_dir():
-    """Get the persistent data directory for storing uploaded files"""
-    # On Render.com, use /opt/render/project/src/data
-    # Locally, use ./data
-    if os.environ.get("RENDER"):
-        # We're on Render
-        data_dir = "/opt/render/project/src/data"
-    else:
-        # We're running locally
-        data_dir = "./data"
-    
-    # Create the directory if it doesn't exist
-    os.makedirs(data_dir, exist_ok=True)
-    return data_dir
 
 def get_season_filename(date_str):
     dt = datetime.strptime(date_str, '%d/%m/%Y')
