@@ -14,29 +14,109 @@ import hashlib
 import PyPDF2
 import re
 import json
+import dropbox
 
 from dash.dash_table.Format import Format, Scheme
 from dash.dependencies import ALL
 
 importlib.reload(tools)
 
-# -------------------------------------------------------------------------
-# Persistent data handling
-# -------------------------------------------------------------------------
-def get_persistent_data_dir():
-    """
-    Return the directory used for persistent storage. On Render.com the
-    persistent disk is mounted at `/opt/render/project/src/data`. If that
-    directory does not exist (e.g. locally), fall back to a local `data`
-    directory. The directory is created if it does not exist.
-    """
-    # Default to Render's persistent disk mount point
-    data_dir = "/opt/render/project/src/data"
-    # Fallback to local data directory if the persistent mount is not present
-    if not os.path.isdir(data_dir):
-        data_dir = "./data"
-    os.makedirs(data_dir, exist_ok=True)
-    return data_dir
+# Dropbox configuration
+DROPBOX_TOKEN = os.environ.get('DROPBOX_TOKEN')
+DROPBOX_FOLDER = '/scrabble_data'
+
+def get_dropbox_client():
+    """Get Dropbox client instance"""
+    if not DROPBOX_TOKEN:
+        print("Warning: DROPBOX_TOKEN not found in environment variables")
+        return None
+    try:
+        return dropbox.Dropbox(DROPBOX_TOKEN)
+    except Exception as e:
+        print(f"Error connecting to Dropbox: {e}")
+        return None
+
+def save_to_dropbox(data, filename, file_type='json'):
+    """Save data to Dropbox"""
+    dbx = get_dropbox_client()
+    if not dbx:
+        return False
+    
+    try:
+        file_path = f"{DROPBOX_FOLDER}/{filename}"
+        
+        if file_type == 'json':
+            # Save as JSON
+            content = json.dumps(data, ensure_ascii=False, indent=2).encode('utf-8')
+        elif file_type == 'csv':
+            # Save as CSV
+            content = data.encode('utf-8')
+        else:
+            return False
+        
+        # Upload to Dropbox
+        dbx.files_upload(content, file_path, mode=dropbox.files.WriteMode.overwrite)
+        print(f"✓ Saved {filename} to Dropbox")
+        return True
+    except Exception as e:
+        print(f"✗ Error saving {filename} to Dropbox: {e}")
+        return False
+
+def load_from_dropbox(filename, file_type='json'):
+    """Load data from Dropbox"""
+    dbx = get_dropbox_client()
+    if not dbx:
+        return None
+    
+    try:
+        file_path = f"{DROPBOX_FOLDER}/{filename}"
+        
+        # Download from Dropbox
+        result = dbx.files_download(file_path)
+        content = result[1].content.decode('utf-8')
+        
+        if file_type == 'json':
+            return json.loads(content)
+        elif file_type == 'csv':
+            return content
+        else:
+            return None
+    except dropbox.exceptions.ApiError as e:
+        if e.error.is_not_found():
+            print(f"File {filename} not found in Dropbox")
+            return None
+        else:
+            print(f"✗ Error loading {filename} from Dropbox: {e}")
+            return None
+    except Exception as e:
+        print(f"✗ Error loading {filename} from Dropbox: {e}")
+        return None
+
+def list_dropbox_files():
+    """List all files in the Dropbox folder"""
+    dbx = get_dropbox_client()
+    if not dbx:
+        return []
+    
+    try:
+        result = dbx.files_list_folder(DROPBOX_FOLDER)
+        return [entry.name for entry in result.entries]
+    except dropbox.exceptions.ApiError as e:
+        if e.error.is_not_found():
+            # Folder doesn't exist yet, create it
+            try:
+                dbx.files_create_folder_v2(DROPBOX_FOLDER)
+                print(f"✓ Created Dropbox folder: {DROPBOX_FOLDER}")
+                return []
+            except Exception as e2:
+                print(f"✗ Error creating Dropbox folder: {e2}")
+                return []
+        else:
+            print(f"✗ Error listing Dropbox files: {e}")
+            return []
+    except Exception as e:
+        print(f"✗ Error listing Dropbox files: {e}")
+        return []
 
 def sync_pdf_files():
     """Sync PDF files from Wedstrijdverslagen to assets/Wedstrijdverslagen"""
@@ -224,39 +304,30 @@ def get_summer_highlighting_data():
 def get_available_seasons():
     """Get list of available season files"""
     seasons = []
-    # Get the persistent data directory to look for files
-    data_dir = get_persistent_data_dir()
-
-    # Look for regular season files (Globaal YYYY-YYYY.xlsx) both in persistent storage and current directory
-    persistent_globaal_files = glob.glob(os.path.join(data_dir, "Globaal *.xlsx"))
-    current_globaal_files = glob.glob("Globaal *.xlsx")
-    all_globaal_files = list(set(persistent_globaal_files + current_globaal_files))
-
-    for file in all_globaal_files:
+    
+    # Look for regular season files (Globaal YYYY-YYYY.xlsx)
+    globaal_files = glob.glob("Globaal *.xlsx")
+    for file in globaal_files:
         # Extract year range from filename
         try:
-            filename = os.path.basename(file)
-            year_range = filename.replace("Globaal ", "").replace(".xlsx", "")
+            year_range = file.replace("Globaal ", "").replace(".xlsx", "")
             seasons.append({
                 "label": f"Seizoen {year_range}",
                 "value": file
             })
-        except Exception:
+        except:
             continue
     
-    # Look for summer files (Zomer YYYY.xlsx) both in persistent storage and current directory
-    persistent_zomer_files = glob.glob(os.path.join(data_dir, "Zomer *.xlsx"))
-    current_zomer_files = glob.glob("Zomer *.xlsx")
-    all_zomer_files = list(set(persistent_zomer_files + current_zomer_files))
-    for file in all_zomer_files:
+    # Look for summer files (Zomer YYYY.xlsx)
+    zomer_files = glob.glob("Zomer *.xlsx")
+    for file in zomer_files:
         try:
-            filename = os.path.basename(file)
-            year = filename.replace("Zomer ", "").replace(".xlsx", "")
+            year = file.replace("Zomer ", "").replace(".xlsx", "")
             seasons.append({
                 "label": f"Zomer {year}",
                 "value": file
             })
-        except Exception:
+        except:
             continue
     
     # Sort by filename for consistent ordering
@@ -341,63 +412,158 @@ def load_data_for_season(filename):
         df_pts_final = pd.DataFrame()
 
 def load_current_data():
-    """Load data from the current season file"""
+    """Load data from Dropbox or fallback to local files"""
     global df_global, df_gen_info, df_pct_final, df_rp_final, df_pts_final, current_filename, available_seasons
     
-    # Get available seasons
-    available_seasons = get_available_seasons()
+    print("=== Loading Current Data ===")
     
-    current_filename = get_current_season_filename()
+    # Get available seasons from Dropbox first
+    dropbox_seasons = get_available_seasons_from_dropbox()
+    print(f"Dropbox seasons: {[s['label'] for s in dropbox_seasons]}")
     
-    # Always prioritise persistent storage for the current season
-    data_dir = get_persistent_data_dir()
-    # If current_filename is a full path (e.g. chosen from dropdown), just use its basename for lookup
-    base_name = os.path.basename(current_filename) if current_filename else ""
-    persistent_path = os.path.join(data_dir, base_name) if base_name else None
-
-    if persistent_path and os.path.exists(persistent_path):
-        # Use the persistent file if it exists
-        filename = persistent_path
-        current_filename = persistent_path
-    elif os.path.exists(current_filename):
-        # Fall back to local file in current directory
-        filename = current_filename
-    elif available_seasons:
-        # Use the first available season file from the list
-        filename = available_seasons[0]["value"]
-        current_filename = filename
-    elif os.path.exists("Globaal.xlsx"):
-        filename = "Globaal.xlsx"
-        current_filename = "Globaal.xlsx"
+    # Also get local seasons as fallback
+    local_seasons = get_available_seasons()
+    print(f"Local seasons: {[s['label'] for s in local_seasons]}")
+    
+    # Combine seasons, prioritizing Dropbox
+    available_seasons = dropbox_seasons + local_seasons
+    
+    if available_seasons:
+        # Use first available season
+        current_season = available_seasons[0]["value"]
+        current_filename = current_season
+        print(f"Using season: {current_season}")
+        
+        # Try to load from Dropbox first
+        df_loaded = load_game_data(current_season)
+        if df_loaded is not None:
+            print(f"✓ Loaded {len(df_loaded)} games from Dropbox")
+            df_global = df_loaded
+            # Process the data
+            process_loaded_data(df_global)
+            return
+        else:
+            print("No data found in Dropbox, trying local files...")
+    
+    # Fallback to local file loading
+    if os.path.exists("Globaal.xlsx"):
+        print("Loading from local Globaal.xlsx")
+        load_data_for_season("Globaal.xlsx")
     else:
         # No data available
+        print("No data available")
         df_global = pd.DataFrame()
+        df_gen_info = pd.DataFrame()
+        df_pct_final = pd.DataFrame()
+        df_rp_final = pd.DataFrame()
+        df_pts_final = pd.DataFrame()
+
+def process_loaded_data(df_loaded):
+    """Process loaded data to create rankings and statistics"""
+    global df_global, df_gen_info, df_pct_final, df_rp_final, df_pts_final
+    
+    df_global = df_loaded
+    
+    # Process the data similar to load_data_for_season
+    if df_global.empty:
         df_gen_info = pd.DataFrame()
         df_pct_final = pd.DataFrame()
         df_rp_final = pd.DataFrame()
         df_pts_final = pd.DataFrame()
         return
     
-    load_data_for_season(filename)
+    # Calculate general info
+    if current_filename and current_filename.startswith('Zomer'):
+        df_gen_info = tools.calculate_summer_percentage(df_global)
+    else:
+        df_gen_info = tools.give_gen_info(df_global)
+    
+    # Calculate rankings
+    df_rankingpct = tools.make_pivot(df_global, 'Naam', 'Datum', 'Percent')
+    df_rankingpct = df_rankingpct.fillna('')
+    
+    # Use appropriate percentage column based on season type
+    if current_filename and current_filename.startswith('Zomer'):
+        # Check which columns actually exist
+        available_columns = df_gen_info.columns.tolist()
+        if '% (Alle)' in available_columns and '% (Beste 5)' in available_columns:
+            columns_pct = ['Naam', 'Klasse', 'Tot. T. MAX', 'Tot. Score', '% (Alle)', '% (Beste 5)'] 
+            df_pct_final = tools.process_final_df(df_gen_info, df_rankingpct, columns_pct, '% (Beste 5)')
+        elif '%' in available_columns:
+            columns_pct = ['Naam', 'Klasse', 'Tot. T. MAX', 'Tot. Score', '%'] 
+            df_pct_final = tools.process_final_df(df_gen_info, df_rankingpct, columns_pct, '%')
+        else:
+            # Fallback to basic columns
+            columns_pct = ['Naam', 'Klasse', 'Tot. T. MAX', 'Tot. Score'] 
+            df_pct_final = tools.process_final_df(df_gen_info, df_rankingpct, columns_pct, 'Tot. Score')
+    else:
+        columns_pct = ['Naam', 'Klasse', 'Tot. T. MAX', 'Tot. Score', '%'] 
+        df_pct_final = tools.process_final_df(df_gen_info, df_rankingpct, columns_pct, '%')
+    
+    df_rp = tools.make_pivot(df_global, 'Naam', 'Datum', 'RP')
+    df_rp = df_rp.fillna('')
+    columns_rp = ['Naam', 'Klasse', 'Gem. RP']
+    df_rp_final = tools.process_final_df(df_gen_info, df_rp, columns_rp, 'Gem. RP')
+    
+    df_global['Punten'] = df_global['Punten'].astype('int64')
+    df_rankingpts = tools.make_pivot(df_global, 'Naam', 'Datum', 'Punten', True)
+    df_rankingpts = df_rankingpts.fillna('')
+    columns_rankingpts = ['Naam', 'Klasse', 'Tot. punten']
+    df_pts_final = tools.process_final_df(df_gen_info, df_rankingpts, columns_rankingpts, 'Tot. punten')
+    
+    print(f"✓ Processed data: {len(df_global)} games, {len(df_gen_info)} players")
+
+# Test Dropbox connectivity
+def test_dropbox_connection():
+    """Test Dropbox connection and create folder if needed"""
+    print("=== Testing Dropbox Connection ===")
+    
+    if not DROPBOX_TOKEN:
+        print("⚠️  DROPBOX_TOKEN not found - app will work with local files only")
+        return False
+    
+    try:
+        dbx = get_dropbox_client()
+        if dbx:
+            # Test connection by listing files
+            files = list_dropbox_files()
+            print(f"✓ Dropbox connection successful - found {len(files)} files")
+            return True
+        else:
+            print("✗ Dropbox connection failed")
+            return False
+    except Exception as e:
+        print(f"✗ Dropbox connection error: {e}")
+        return False
+
+# Test Dropbox connection
+dropbox_available = test_dropbox_connection()
 
 # Load initial data
 load_current_data()
 
 # Member management functions
 def load_member_data():
-    """Load member data from JSON file or create from Excel if not exists"""
-    json_file = "members.json"
+    """Load member data from Dropbox or create sample data if not exists"""
+    # Try to load from Dropbox first
+    data = load_from_dropbox('members.json', 'json')
+    if data:
+        print("✓ Loaded member data from Dropbox")
+        return pd.DataFrame(data)
     
+    # If not in Dropbox, try local file
+    json_file = "members.json"
     if os.path.exists(json_file):
         try:
             with open(json_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+            print("✓ Loaded member data from local file")
             return pd.DataFrame(data)
         except Exception as e:
             print(f"Error loading members.json: {e}")
     
-    # If JSON doesn't exist, create sample data
-    print("No members.json found - creating sample data")
+    # If no data exists, create sample data
+    print("No member data found - creating sample data")
     sample_members = [
         {'Naam': 'TORREELE Ronald', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
         {'Naam': 'VANDENBERGHE Riet', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
@@ -423,14 +589,58 @@ def load_member_data():
     return df_leden
 
 def save_member_data(df):
-    """Save member data to JSON file"""
+    """Save member data to Dropbox and local file"""
+    data = df.to_dict('records')
+    
+    # Save to Dropbox
+    dropbox_success = save_to_dropbox(data, 'members.json', 'json')
+    
+    # Also save locally as backup
     try:
         with open("members.json", 'w', encoding='utf-8') as f:
-            json.dump(df.to_dict('records'), f, ensure_ascii=False, indent=2)
-        return True
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        local_success = True
     except Exception as e:
-        print(f"Error saving members.json: {e}")
-        return False
+        print(f"Error saving members.json locally: {e}")
+        local_success = False
+    
+    return dropbox_success or local_success
+
+# Game data storage functions
+def save_game_data(df, season_name):
+    """Save game data to Dropbox"""
+    data = df.to_dict('records')
+    filename = f"{season_name.lower().replace(' ', '_')}.json"
+    return save_to_dropbox(data, filename, 'json')
+
+def load_game_data(season_name):
+    """Load game data from Dropbox"""
+    filename = f"{season_name.lower().replace(' ', '_')}.json"
+    data = load_from_dropbox(filename, 'json')
+    if data:
+        return pd.DataFrame(data)
+    return None
+
+def get_available_seasons_from_dropbox():
+    """Get list of available seasons from Dropbox"""
+    files = list_dropbox_files()
+    seasons = []
+    
+    for file in files:
+        if file.endswith('.json') and file != 'members.json':
+            # Convert filename back to season name
+            season_name = file.replace('.json', '').replace('_', ' ').title()
+            if 'zomer' in season_name.lower():
+                season_name = season_name.replace('Zomer', 'Zomer')
+            elif 'seizoen' in season_name.lower():
+                season_name = season_name.replace('Seizoen', 'Seizoen')
+            
+            seasons.append({
+                "label": season_name,
+                "value": season_name
+            })
+    
+    return seasons
 
 # Load member data
 df_leden = load_member_data()
@@ -899,6 +1109,10 @@ app.layout = dbc.Container([
     dbc.Row([
         dbc.Col([
             html.Div([
+                html.I(className="fas fa-cloud me-2"),
+                html.Span("Dropbox: Verbonden" if dropbox_available else "Dropbox: Niet verbonden", 
+                         className="text-success" if dropbox_available else "text-warning"),
+                html.Span(" | ", className="mx-2"),
                 html.I(className="fas fa-lock me-2"),
                 html.Span("Niet ingelogd", className="text-muted"),
                 html.Button("Admin Login", id="admin-login-btn", className="btn btn-sm btn-primary ms-2")
@@ -1468,31 +1682,16 @@ def process_upload(date, contents, filename):
             print(f"Warning: Players not found in member data: {missing_players}")
             print("These players will be processed with default club/class info")
     
-    # Always determine the season filename based on the uploaded date
-    season_filename = get_season_filename(date_str)
-    # Build the path to the persistent storage
-    data_dir = get_persistent_data_dir()
-    persistent_season_path = os.path.join(data_dir, os.path.basename(season_filename))
-    # Check for duplicates and assign volgnummer, prioritising the persistent file
-    if os.path.exists(persistent_season_path):
-        try:
-            df_season = pd.read_excel(persistent_season_path, sheet_name='Globaal')
-        except Exception as e:
-            return f'Fout bij het lezen van {persistent_season_path}: {e}'
+    # Always determine the season name based on the uploaded date
+    season_name = get_season_filename(date_str).replace('.xlsx', '')
+    
+    # Check for duplicates and assign volgnummer
+    df_season = load_game_data(season_name)
+    if df_season is not None:
         # Check if this date already exists
         if (df_season['Datum'] == date_str).any():
-            return f'Deze uitslag voor {date_str} werd al ingelezen in {os.path.basename(season_filename)}.'
+            return f'Deze uitslag voor {date_str} werd al ingelezen in {season_name}.'
         # Assign volgnummer as one more than the number of unique dates (sorted chronologically)
-        unique_dates = sorted(pd.to_datetime(df_season['Datum'], dayfirst=True).unique())
-        volgnummer = len(unique_dates) + 1
-    elif os.path.exists(season_filename):
-        # Fall back to local file if the persistent one doesn't exist yet
-        try:
-            df_season = pd.read_excel(season_filename, sheet_name='Globaal')
-        except Exception as e:
-            return f'Fout bij het lezen van {season_filename}: {e}'
-        if (df_season['Datum'] == date_str).any():
-            return f'Deze uitslag voor {date_str} werd al ingelezen in {season_filename}.'
         unique_dates = sorted(pd.to_datetime(df_season['Datum'], dayfirst=True).unique())
         volgnummer = len(unique_dates) + 1
     else:
@@ -1518,22 +1717,27 @@ def process_upload(date, contents, filename):
     df_new['Datum_dt'] = pd.to_datetime(df_new['Datum'], dayfirst=True)
     df_new = assign_smart_game_numbers(df_new)
     
-    # Save the updated data to the persistent storage. Also write to the local file
+    # Save to Dropbox
+    if save_game_data(df_new, season_name):
+        print(f"✓ Saved {len(df_new)} games to Dropbox for {season_name}")
+    else:
+        return f'Fout bij het opslaan van {season_name} naar Dropbox.'
+    
+    # Also save locally as backup
     try:
-        # Always write to the persistent path first
-        df_new.to_excel(persistent_season_path, sheet_name='Globaal', index=False)
-        # Also keep a copy in the current working directory for convenience
-        df_new.to_excel(season_filename, sheet_name='Globaal', index=False)
+        local_filename = f"{season_name}.xlsx"
+        df_new.to_excel(local_filename, sheet_name='Globaal', index=False)
+        print(f"✓ Also saved locally as backup: {local_filename}")
     except Exception as e:
-        return f'Fout bij het opslaan van {os.path.basename(season_filename)}: {e}'
-
-    # Reload data (this will pick up the persistent file on restart)
+        print(f"Warning: Could not save locally: {e}")
+    
+    # Reload data
     load_current_data()
-
+    
     # Get the actual game number that was assigned
     actual_game_nr = df_new[df_new['Datum'] == date_str]['GameNr'].iloc[0]
-
-    return f'Uitslag voor {date_str} (wedstrijd {actual_game_nr}) succesvol toegevoegd aan {os.path.basename(season_filename)}!'
+    
+    return f'Uitslag voor {date_str} (wedstrijd {actual_game_nr}) succesvol toegevoegd aan {season_name}!'
 
 # PDF Upload Callbacks
 @app.callback(
@@ -2161,7 +2365,9 @@ def handle_member_deletions(previous_data, current_data):
 # Print functionality is now handled by JavaScript in the HTML template
 
 if __name__ == "__main__":
-    print("Starting Dash app...")
+    print("=== Starting Scrabble App ===")
+    print(f"Dropbox available: {dropbox_available}")
+    
     # Use environment variable for port (Render requirement)
     port = int(os.environ.get("PORT", 8050))
     debug = os.environ.get("DEBUG", "False").lower() == "true"  # Default to False for production
