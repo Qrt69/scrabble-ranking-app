@@ -182,16 +182,20 @@ def make_pivot(dfp, pindex, pcols, pvalues, force_int=False, fill_blank=True):
     pivot_to_return.columns = pivot_to_return.columns.strftime('%d/%m/%Y')
 
     # Replace NaN with blanks or integers as needed
-    if force_int:
-        # Replace NaN with blanks and cast only non-empty cells to integers
-        pivot_to_return = pivot_to_return.map(
-            lambda x: int(x) if pd.notna(x) else ''
-        )
-    elif fill_blank:
-        # Round numeric values to 2 decimal places and format as strings before filling blanks
-        pivot_to_return = pivot_to_return.round(2)
-        pivot_to_return = pivot_to_return.map(lambda x: f"{float(x):.2f}" if pd.notnull(x) and x != '' and str(x).replace('.', '').replace('-', '').isdigit() else x)
-        pivot_to_return = pivot_to_return.fillna('')  # Replace NaN with blank strings
+    if not pivot_to_return.empty:
+        if force_int:
+            # Replace NaN with blanks and cast only non-empty cells to integers
+            pivot_to_return = pivot_to_return.map(
+                lambda x: int(x) if pd.notna(x) else ''
+            )
+        elif fill_blank:
+            # Round numeric values to 2 decimal places and format as strings before filling blanks
+            pivot_to_return = pivot_to_return.round(2)
+            pivot_to_return = pivot_to_return.map(lambda x: f"{float(x):.2f}" if pd.notnull(x) and x != '' and str(x).replace('.', '').replace('-', '').isdigit() else x)
+            pivot_to_return = pivot_to_return.fillna('')  # Replace NaN with blank strings
+    else:
+        # If pivot table is empty, just fill NaN with blanks
+        pivot_to_return = pivot_to_return.fillna('')
 
     return pivot_to_return
 
