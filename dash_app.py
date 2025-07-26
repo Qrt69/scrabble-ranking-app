@@ -6,7 +6,7 @@ import tools
 import importlib
 import plotly.express as px
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 import base64
 import io
 import glob
@@ -19,21 +19,6 @@ from dash.dash_table.Format import Format, Scheme
 from dash.dependencies import ALL
 
 importlib.reload(tools)
-
-def get_persistent_data_dir():
-    """Get the persistent data directory for storing uploaded files"""
-    # On Render.com, use /opt/render/project/src/data
-    # Locally, use ./data
-    if os.environ.get("RENDER"):
-        # We're on Render
-        data_dir = "/opt/render/project/src/data"
-    else:
-        # We're running locally
-        data_dir = "./data"
-    
-    # Create the directory if it doesn't exist
-    os.makedirs(data_dir, exist_ok=True)
-    return data_dir
 
 def sync_pdf_files():
     """Sync PDF files from Wedstrijdverslagen to assets/Wedstrijdverslagen"""
@@ -61,16 +46,6 @@ def sync_pdf_files():
             print(f"Synced: {filename}")
     
     print(f"PDF sync complete. {len(source_files)} files processed.")
-
-def encode_image(image_path):
-    """Encode image to base64 for embedding in HTML"""
-    try:
-        with open(image_path, "rb") as image_file:
-            encoded_string = base64.b64encode(image_file.read()).decode()
-        return f"data:image/png;base64,{encoded_string}"
-    except FileNotFoundError:
-        print(f"Warning: Image file {image_path} not found")
-        return None
 
 # Sync PDF files on startup
 sync_pdf_files()
@@ -159,38 +134,26 @@ def get_available_pdf_reports():
     """Scan Wedstrijdverslagen folder and return mapping of dates to PDF files"""
     pdf_mapping = {}
     
-    # Get persistent data directory
-    data_dir = get_persistent_data_dir()
+    if not os.path.exists("Wedstrijdverslagen"):
+        return pdf_mapping
     
-    # Check both current directory and persistent data directory
-    pdf_dirs = ["Wedstrijdverslagen"]
-    persistent_pdf_dir = os.path.join(data_dir, "Wedstrijdverslagen")
-    if os.path.exists(persistent_pdf_dir):
-        pdf_dirs.append(persistent_pdf_dir)
-    
-    for pdf_dir in pdf_dirs:
-        if not os.path.exists(pdf_dir):
-            continue
-        
-        for filename in os.listdir(pdf_dir):
-            if filename.endswith('.pdf'):
-                # Parse filename like "zomerwedstrijd 1 van 3-7-25.pdf"
-                try:
-                    # Extract date part after "van "
-                    if "van " in filename:
-                        date_part = filename.split("van ")[1].replace('.pdf', '')
-                        # Convert to DD/MM/YYYY format
-                        if '-' in date_part:
-                            day, month, year = date_part.split('-')
-                            # Add 20 prefix to year if it's 2 digits
-                            if len(year) == 2:
-                                year = '20' + year
-                            date_str = f"{day.zfill(2)}/{month.zfill(2)}/{year}"
-                            # Use full path for the filename
-                            full_path = os.path.join(pdf_dir, filename)
-                            pdf_mapping[date_str] = full_path
-                except Exception as e:
-                    continue
+    for filename in os.listdir("Wedstrijdverslagen"):
+        if filename.endswith('.pdf'):
+            # Parse filename like "zomerwedstrijd 1 van 3-7-25.pdf"
+            try:
+                # Extract date part after "van "
+                if "van " in filename:
+                    date_part = filename.split("van ")[1].replace('.pdf', '')
+                    # Convert to DD/MM/YYYY format
+                    if '-' in date_part:
+                        day, month, year = date_part.split('-')
+                        # Add 20 prefix to year if it's 2 digits
+                        if len(year) == 2:
+                            year = '20' + year
+                        date_str = f"{day.zfill(2)}/{month.zfill(2)}/{year}"
+                        pdf_mapping[date_str] = filename
+            except Exception as e:
+                continue
     
     return pdf_mapping
 
@@ -244,52 +207,33 @@ def get_available_seasons():
     """Get list of available season files"""
     seasons = []
     
-    # Get persistent data directory
-    data_dir = get_persistent_data_dir()
-    
-    # Create a dictionary to track the best version of each file
-    file_versions = {}
-    
-    # Look for regular season files (Globaal YYYY-YYYY.xlsx) in both current dir and data dir
-    globaal_files = glob.glob("Globaal *.xlsx") + glob.glob(os.path.join(data_dir, "Globaal *.xlsx"))
+    # Look for regular season files (Globaal YYYY-YYYY.xlsx)
+    globaal_files = glob.glob("Globaal *.xlsx")
     for file in globaal_files:
         # Extract year range from filename
         try:
-            filename = os.path.basename(file)  # Get just the filename, not the full path
-            year_range = filename.replace("Globaal ", "").replace(".xlsx", "")
-            
-            # Prioritize persistent data directory over current directory
-            if filename not in file_versions or file.startswith(data_dir):
-                file_versions[filename] = {
-                    "label": f"Seizoen {year_range}",
-                    "value": file,  # Keep full path for loading
-                    "year_range": year_range
-                }
+            year_range = file.replace("Globaal ", "").replace(".xlsx", "")
+            seasons.append({
+                "label": f"Seizoen {year_range}",
+                "value": file
+            })
         except:
             continue
     
-    # Look for summer files (Zomer YYYY.xlsx) in both current dir and data dir
-    zomer_files = glob.glob("Zomer *.xlsx") + glob.glob(os.path.join(data_dir, "Zomer *.xlsx"))
+    # Look for summer files (Zomer YYYY.xlsx)
+    zomer_files = glob.glob("Zomer *.xlsx")
     for file in zomer_files:
         try:
-            filename = os.path.basename(file)  # Get just the filename, not the full path
-            year = filename.replace("Zomer ", "").replace(".xlsx", "")
-            
-            # Prioritize persistent data directory over current directory
-            if filename not in file_versions or file.startswith(data_dir):
-                file_versions[filename] = {
-                    "label": f"Zomer {year}",
-                    "value": file,  # Keep full path for loading
-                    "year": year
-                }
+            year = file.replace("Zomer ", "").replace(".xlsx", "")
+            seasons.append({
+                "label": f"Zomer {year}",
+                "value": file
+            })
         except:
             continue
     
-    # Convert dictionary values to list
-    seasons = list(file_versions.values())
-    
     # Sort by filename for consistent ordering
-    seasons.sort(key=lambda x: os.path.basename(x["value"]))
+    seasons.sort(key=lambda x: x["value"])
     return seasons
 
 def get_current_season_filename():
@@ -300,7 +244,7 @@ def get_current_season_filename():
     
     if month in [7, 8]:
         # Summer competition
-        filename = f'Zomer {year}.xlsx'
+        return f'Zomer {year}.xlsx'
     else:
         # Regular season: September (9) to June (6)
         if month >= 9:
@@ -309,20 +253,7 @@ def get_current_season_filename():
         else:
             start_year = year - 1
             end_year = year
-        filename = f'Globaal {start_year}-{end_year}.xlsx'
-    
-    # PRIORITY: Check persistent data directory first (most up-to-date)
-    data_dir = get_persistent_data_dir()
-    persistent_path = os.path.join(data_dir, filename)
-    if os.path.exists(persistent_path):
-        return persistent_path
-    
-    # Fall back to current directory
-    if os.path.exists(filename):
-        return filename
-    
-    # If file doesn't exist anywhere, return the persistent path for new uploads
-    return persistent_path
+        return f'Globaal {start_year}-{end_year}.xlsx'
 
 def load_data_for_season(filename):
     """Load data from a specific season file"""
@@ -386,46 +317,22 @@ def load_current_data():
     """Load data from the current season file"""
     global df_global, df_gen_info, df_pct_final, df_rp_final, df_pts_final, current_filename, available_seasons
     
-    print("=== Loading Current Data ===")
-    
     # Get available seasons
     available_seasons = get_available_seasons()
-    print(f"Available seasons: {[s['label'] for s in available_seasons]}")
     
     current_filename = get_current_season_filename()
-    print(f"Current filename: {current_filename}")
     
-    # PRIORITY: Always check persistent data directory first for current season
-    data_dir = get_persistent_data_dir()
-    current_season_name = os.path.basename(current_filename)
-    persistent_path = os.path.join(data_dir, current_season_name)
-    
-    print(f"Persistent path: {persistent_path}")
-    print(f"Persistent exists: {os.path.exists(persistent_path)}")
-    print(f"Current exists: {os.path.exists(current_filename)}")
-    
-    if os.path.exists(persistent_path):
-        # Use the persistent data directory version (most up-to-date)
-        filename = persistent_path
-        current_filename = persistent_path
-        print(f"✓ Using persistent file: {filename}")
-    elif os.path.exists(current_filename):
-        # Fall back to current directory
+    # Check if current season file exists, otherwise fall back to first available or Globaal.xlsx
+    if os.path.exists(current_filename):
         filename = current_filename
-        print(f"✓ Using current file: {filename}")
     elif available_seasons:
-        # Fall back to first available season
         filename = available_seasons[0]["value"]
         current_filename = filename
-        print(f"✓ Using first available season: {filename}")
     elif os.path.exists("Globaal.xlsx"):
-        # Final fallback
         filename = "Globaal.xlsx"
         current_filename = "Globaal.xlsx"
-        print(f"✓ Using fallback file: {filename}")
     else:
         # No data available
-        print("✗ No data files found!")
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
         df_pct_final = pd.DataFrame()
@@ -433,92 +340,9 @@ def load_current_data():
         df_pts_final = pd.DataFrame()
         return
     
-    print(f"Loading data from: {filename}")
     load_data_for_season(filename)
 
-# Test Render.com storage on startup
-def test_render_storage():
-    """Test if Render.com storage is working"""
-    print("=== Testing Render.com Storage ===")
-    
-    is_render = os.environ.get("RENDER")
-    print(f"Running on Render: {is_render}")
-    
-    if is_render:
-        data_dir = "/opt/render/project/src/data"
-    else:
-        data_dir = "./data"
-    
-    print(f"Data directory: {data_dir}")
-    
-    try:
-        os.makedirs(data_dir, exist_ok=True)
-        test_file = os.path.join(data_dir, "startup_test.txt")
-        
-        with open(test_file, 'w') as f:
-            f.write(f"App started at {datetime.now()}")
-        
-        with open(test_file, 'r') as f:
-            content = f.read()
-        
-        print(f"✓ Storage test successful: {content}")
-        os.remove(test_file)
-        
-    except Exception as e:
-        print(f"✗ Storage test failed: {e}")
-        print("⚠️  WARNING: Uploaded games may not persist!")
-
-# Run storage test
-test_render_storage()
-
-# Sync existing data to persistent storage
-def sync_existing_data_to_persistent():
-    """Copy existing Excel files to persistent storage if they don't exist there"""
-    print("=== Syncing Data to Persistent Storage ===")
-    
-    data_dir = get_persistent_data_dir()
-    
-    # Files to sync
-    files_to_sync = [
-        "Zomer 2025.xlsx",
-        "Globaal 2024-2025.xlsx", 
-        "Globaal.xlsx"
-    ]
-    
-    for filename in files_to_sync:
-        if os.path.exists(filename):
-            persistent_path = os.path.join(data_dir, filename)
-            
-            if not os.path.exists(persistent_path):
-                try:
-                    import shutil
-                    shutil.copy2(filename, persistent_path)
-                    print(f"✓ Synced {filename} to persistent storage")
-                except Exception as e:
-                    print(f"✗ Error syncing {filename}: {e}")
-            else:
-                # Check if persistent file is newer (has more data)
-                try:
-                    import pandas as pd
-                    current_rows = len(pd.read_excel(filename, sheet_name='Globaal'))
-                    persistent_rows = len(pd.read_excel(persistent_path, sheet_name='Globaal'))
-                    
-                    if persistent_rows >= current_rows:
-                        print(f"✓ {filename} already exists in persistent storage ({persistent_rows} rows)")
-                    else:
-                        # Persistent has less data, copy the current file
-                        import shutil
-                        shutil.copy2(filename, persistent_path)
-                        print(f"✓ Updated {filename} in persistent storage ({current_rows} rows)")
-                except Exception as e:
-                    print(f"✗ Error checking {filename}: {e}")
-                    # Fallback: don't overwrite
-                    print(f"✓ Keeping existing {filename} in persistent storage")
-
-# Sync data on startup
-sync_existing_data_to_persistent()
-
-# Load initial data (AFTER syncing)
+# Load initial data
 load_current_data()
 
 # Member management functions
@@ -534,18 +358,20 @@ def load_member_data():
         except Exception as e:
             print(f"Error loading members.json: {e}")
     
-    # If JSON doesn't exist, create sample data
-    print("No members.json found, creating sample data")
-    sample_members = [
-        {'Naam': 'TORREELE Ronald', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'VANDENBERGHE Riet', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'FARASYN Kurt', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'}
-    ]
-    df_leden = pd.DataFrame(sample_members)
+    # If JSON doesn't exist, create from Excel file
+    if os.path.exists("Info.xlsx"):
+        try:
+            df_leden = pd.read_excel("Info.xlsx", sheet_name="Leden")
+            df_leden.rename(columns={'NAAM': 'Naam'}, inplace=True)
+            
+            # Save to JSON for future use
+            save_member_data(df_leden)
+            return df_leden
+        except Exception as e:
+            print(f"Error loading from Info.xlsx: {e}")
     
-    # Save to JSON for future use
-    save_member_data(df_leden)
-    return df_leden
+    # Return empty DataFrame if no data available
+    return pd.DataFrame(columns=['Naam', 'CLUB', 'KLASSE'])
 
 def save_member_data(df):
     """Save member data to JSON file"""
@@ -949,7 +775,7 @@ def get_season_filename(date_str):
     month = dt.month
     if month in [7, 8]:
         # Summer competition
-        filename = f'Zomer {year}.xlsx'
+        return f'Zomer {year}.xlsx'
     else:
         # Regular season: September (9) to June (6)
         if month >= 9:
@@ -958,11 +784,7 @@ def get_season_filename(date_str):
         else:
             start_year = year - 1
             end_year = year
-        filename = f'Globaal {start_year}-{end_year}.xlsx'
-    
-    # Use persistent data directory for saving uploaded files
-    data_dir = get_persistent_data_dir()
-    return os.path.join(data_dir, filename)
+        return f'Globaal {start_year}-{end_year}.xlsx'
 
 app = dash.Dash(__name__, external_stylesheets=[
     dbc.themes.BOOTSTRAP,
@@ -1132,33 +954,11 @@ def render_tab(tab, selected_season):
         else:
             pdf_section = ""
         
-        # Encode the chocolate image
-        chocolate_image = encode_image("EAfscw4r9o.png")
-        
         return html.Div([
-            # Header with chocolate image in upper right corner
-            dbc.Row([
-                dbc.Col([
-                    html.Div([
-                        html.Button("Download Excel", id="download-info-btn", className="btn btn-success me-2"),
-                        html.Button("Print", id="print-info-btn", className="btn btn-primary", 
-                                  **{"data-print": "true"}),
-                    ], className="mb-3"),
-                ], md=8),
-                dbc.Col([
-                    html.Div([
-                        html.Img(
-                            src=chocolate_image,
-                            style={
-                                "height": "60px",
-                                "width": "auto",
-                                "float": "right",
-                                "marginTop": "10px"
-                            },
-                            title="🍫 Solo Achievement - Hoogste score in een beurt en alleen!"
-                        ) if chocolate_image else html.Div()
-                    ], className="text-end")
-                ], md=4)
+            html.Div([
+                html.Button("Download Excel", id="download-info-btn", className="btn btn-success me-2"),
+                html.Button("Print", id="print-info-btn", className="btn btn-primary", 
+                          **{"data-print": "true"}),
             ], className="mb-3"),
             dcc.Download(id="download-info-xlsx"),
             make_table(df_gen_info, "table-info", "Globaal Overzicht"),
@@ -1576,13 +1376,7 @@ def handle_csv_upload(contents, filename):
     [State('upload-csv', 'contents'), State('upload-csv', 'filename')]
 )
 def process_upload(date, contents, filename):
-    print(f"=== UPLOAD CALLBACK TRIGGERED ===")
-    print(f"Date: {date}")
-    print(f"Filename: {filename}")
-    print(f"Contents: {'Present' if contents else 'None'}")
-    
     if not date or not contents:
-        print("✗ Missing date or contents")
         return ''
     
     # Convert date from ISO to DD/MM/YYYY
@@ -1600,63 +1394,30 @@ def process_upload(date, contents, filename):
     except Exception as e:
         return f'Fout bij het lezen van het CSV-bestand: {e}'
     
-    # Use the global member data (loaded from JSON)
-    df_leden = load_member_data()
+    # Read supporting Excel file for leden
+    try:
+        df_leden = pd.read_excel('Info.xlsx', sheet_name='Leden')
+        df_leden.rename(columns={'NAAM': 'Naam'}, inplace=True)
+    except Exception as e:
+        return f'Fout bij het lezen van Info.xlsx: {e}'
     
     # Always determine the season filename based on the uploaded date
     season_filename = get_season_filename(date_str)
     
     # Check for duplicates and assign volgnummer
-    # Load and merge data from both locations to ensure we have all games
-    filename_only = os.path.basename(season_filename)
-    current_dir_file = filename_only
-    persistent_file = season_filename
-    
-    # Try to load existing data from both locations and merge them
-    df_season = None
-    df_current = None
-    df_persistent = None
-    
-    # Load from current directory
-    if os.path.exists(current_dir_file):
+    if os.path.exists(season_filename):
         try:
-            df_current = pd.read_excel(current_dir_file, sheet_name='Globaal')
-            print(f"Loaded {len(df_current)} rows from current directory")
+            df_season = pd.read_excel(season_filename, sheet_name='Globaal')
         except Exception as e:
-            print(f"Error reading from current directory: {e}")
-    
-    # Load from persistent directory
-    if os.path.exists(persistent_file):
-        try:
-            df_persistent = pd.read_excel(persistent_file, sheet_name='Globaal')
-            print(f"Loaded {len(df_persistent)} rows from persistent directory")
-        except Exception as e:
-            print(f"Error reading from persistent directory: {e}")
-    
-    # Merge data from both locations, prioritizing persistent directory for duplicates
-    if df_current is not None and df_persistent is not None:
-        # Combine both dataframes, removing duplicates based on date
-        df_combined = pd.concat([df_current, df_persistent], ignore_index=True)
-        # Remove duplicates based on date, keeping the last occurrence (from persistent)
-        df_season = df_combined.drop_duplicates(subset=['Datum'], keep='last')
-        print(f"Merged data: {len(df_season)} rows after removing duplicates")
-    elif df_current is not None:
-        df_season = df_current
-        print(f"Using current directory data: {len(df_season)} rows")
-    elif df_persistent is not None:
-        df_season = df_persistent
-        print(f"Using persistent directory data: {len(df_season)} rows")
-    
-    existing_file_path = persistent_file  # Always use persistent as the target
-    
-    if df_season is not None:
+            return f'Fout bij het lezen van {season_filename}: {e}'
         # Check if this date already exists
         if (df_season['Datum'] == date_str).any():
-            return f'Deze uitslag voor {date_str} werd al ingelezen in {existing_file_path}.'
+            return f'Deze uitslag voor {date_str} werd al ingelezen in {season_filename}.'
         # Assign volgnummer as one more than the number of unique dates (sorted chronologically)
         unique_dates = sorted(pd.to_datetime(df_season['Datum'], dayfirst=True).unique())
         volgnummer = len(unique_dates) + 1
     else:
+        df_season = None
         volgnummer = 1
     
     # Prepare row_wedstrijdinfo
@@ -1679,26 +1440,8 @@ def process_upload(date, contents, filename):
     df_new = assign_smart_game_numbers(df_new)
     
     try:
-        # Always save to persistent location first
         df_new.to_excel(season_filename, sheet_name='Globaal', index=False)
-        print(f"✓ Saved {len(df_new)} rows to persistent location: {season_filename}")
-        
-        # Also update the current directory file to keep them in sync
-        if os.path.exists(current_dir_file) or len(df_new) > 0:
-            df_new.to_excel(current_dir_file, sheet_name='Globaal', index=False)
-            print(f"✓ Also saved to current directory: {current_dir_file}")
-        
-        # Verify the file was actually saved
-        if os.path.exists(season_filename):
-            print(f"✓ Verified: persistent file exists after save")
-            # Check file size
-            file_size = os.path.getsize(season_filename)
-            print(f"✓ File size: {file_size} bytes")
-        else:
-            print(f"✗ ERROR: persistent file does not exist after save!")
-            
     except Exception as e:
-        print(f"✗ Error saving file: {e}")
         return f'Fout bij het opslaan van {season_filename}: {e}'
     
     # Reload data
@@ -1707,25 +1450,7 @@ def process_upload(date, contents, filename):
     # Get the actual game number that was assigned
     actual_game_nr = df_new[df_new['Datum'] == date_str]['GameNr'].iloc[0]
     
-    print(f"✓ Upload successful: {date_str} (game {actual_game_nr})")
-    print(f"✓ Current data has {len(df_global) if df_global is not None else 0} rows")
-    
     return f'Uitslag voor {date_str} (wedstrijd {actual_game_nr}) succesvol toegevoegd aan {season_filename}!'
-
-# Simple callback to trigger page refresh after upload
-@app.callback(
-    Output("upload-status", "children", allow_duplicate=True),
-    [Input("upload-status", "children")],
-    prevent_initial_call=True
-)
-def trigger_refresh_after_upload(upload_status):
-    """Add refresh instruction to upload status"""
-    if upload_status and "succesvol" in upload_status:
-        return f"{upload_status} **Ververs de pagina om de nieuwe data te zien.**"
-    return upload_status
-
-# Note: Removed complex refresh callbacks to avoid conflicts
-# Tables will refresh when user switches tabs or refreshes the page
 
 # PDF Upload Callbacks
 @app.callback(
@@ -1796,44 +1521,17 @@ def process_pdf_upload(n_clicks, contents, filename):
     
     # Check if PDF already exists for this date
     pdf_mapping = get_available_pdf_reports()
-    print(f"Checking for existing PDF for date: {date_str}")
-    print(f"Available PDFs: {list(pdf_mapping.keys())}")
     if date_str in pdf_mapping:
-        existing_file = pdf_mapping[date_str]
-        print(f"Found existing file: {existing_file}")
-        return f'⚠️ Er bestaat al een PDF-verslag voor {date_str} ({existing_file}). Upload geannuleerd.'
+        return f'⚠️ Er bestaat al een PDF-verslag voor {date_str}. Upload geannuleerd.'
     
     # Generate filename based on date (matching existing pattern)
     dt_obj = datetime.strptime(date_str, '%d/%m/%Y')
-    
-    # Check existing files to determine the next game number
-    existing_files = [f for f in os.listdir("Wedstrijdverslagen") if f.endswith('.pdf')]
-    
     if dt_obj.month in [7, 8]:
-        # Summer competition - find next game number
-        summer_files = [f for f in existing_files if f.startswith('zomerwedstrijd')]
-        if summer_files:
-            # Extract game numbers from existing summer files
-            game_numbers = []
-            for file in summer_files:
-                try:
-                    # Extract number from "zomerwedstrijd X van"
-                    parts = file.split(' van ')[0].split()
-                    if len(parts) >= 2 and parts[1].isdigit():
-                        game_numbers.append(int(parts[1]))
-                except:
-                    continue
-            next_game_number = max(game_numbers) + 1 if game_numbers else 1
-        else:
-            next_game_number = 1
-        
-        # Summer format: "zomerwedstrijd X van DD-M-YY.pdf"
-        filename_new = f"zomerwedstrijd {next_game_number} van {dt_obj.day}-{dt_obj.month}-{str(dt_obj.year)[2:]}.pdf"
-        print(f"Generated summer filename: {filename_new} (game number: {next_game_number})")
+        # Summer competition - use DD-M-YY format like existing files
+        filename_new = f"zomerwedstrijd van {dt_obj.day}-{dt_obj.month}-{str(dt_obj.year)[2:]}.pdf"
     else:
         # Regular season - use DD-M-YYYY format like existing files
         filename_new = f"wedstrijd van {dt_obj.day}-{dt_obj.month}-{dt_obj.year}.pdf"
-        print(f"Generated regular filename: {filename_new}")
     
     # Save PDF to assets folder
     try:
@@ -1841,15 +1539,12 @@ def process_pdf_upload(n_clicks, contents, filename):
         content_type, content_string = contents.split(',')
         decoded = base64.b64decode(content_string)
         
-        # Get persistent data directory
-        data_dir = get_persistent_data_dir()
-        
         # Ensure assets directory exists
         assets_dir = "assets/Wedstrijdverslagen"
         if not os.path.exists(assets_dir):
             os.makedirs(assets_dir)
         
-        # Save file to assets (for immediate access)
+        # Save file
         pdf_path = os.path.join(assets_dir, filename_new)
         print(f"Saving to assets: {pdf_path}")
         with open(pdf_path, 'wb') as f:
@@ -1865,23 +1560,11 @@ def process_pdf_upload(n_clicks, contents, filename):
         with open(main_pdf_path, 'wb') as f:
             f.write(decoded)
         
-        # Save to persistent data directory for long-term storage
-        persistent_pdf_dir = os.path.join(data_dir, "Wedstrijdverslagen")
-        if not os.path.exists(persistent_pdf_dir):
-            os.makedirs(persistent_pdf_dir)
-        
-        persistent_pdf_path = os.path.join(persistent_pdf_dir, filename_new)
-        print(f"Saving to persistent: {persistent_pdf_path}")
-        with open(persistent_pdf_path, 'wb') as f:
-            f.write(decoded)
-        
         # Verify files were saved correctly
         if not os.path.exists(pdf_path):
             return f'❌ Fout: PDF kon niet worden opgeslagen in assets folder'
         if not os.path.exists(main_pdf_path):
             return f'❌ Fout: PDF kon niet worden opgeslagen in hoofdmap'
-        if not os.path.exists(persistent_pdf_path):
-            return f'❌ Fout: PDF kon niet worden opgeslagen in persistente map'
         
         # Note: PDF mapping will be refreshed on next app load
         print("PDF files saved successfully")
@@ -1930,14 +1613,6 @@ def delete_game(n_clicks, game_nr):
         # Save updated file
         if current_filename:
             df_updated.to_excel(current_filename, sheet_name='Globaal', index=False)
-            
-            # Also save to persistent data directory if not already there
-            data_dir = get_persistent_data_dir()
-            filename_only = os.path.basename(current_filename)
-            persistent_path = os.path.join(data_dir, filename_only)
-            
-            if current_filename != persistent_path:
-                df_updated.to_excel(persistent_path, sheet_name='Globaal', index=False)
         else:
             return 'Geen bestand geselecteerd voor opslag.', None, []
         
@@ -1990,29 +1665,15 @@ def handle_game_pdf_selection(selected_date):
     pdf_mapping = get_available_pdf_reports()
     
     if selected_date in pdf_mapping:
-        pdf_full_path = pdf_mapping[selected_date]
-        pdf_filename = os.path.basename(pdf_full_path)
+        pdf_filename = pdf_mapping[selected_date]
+        pdf_path = f"Wedstrijdverslagen/{pdf_filename}"
         
-        # Check if file exists
-        if os.path.exists(pdf_full_path):
-            # Determine the correct path for the iframe
-            # If it's in the persistent data directory, we need to copy it to assets for web access
-            if "assets" not in pdf_full_path:
-                # Copy to assets if not already there
-                assets_pdf_path = f"assets/Wedstrijdverslagen/{pdf_filename}"
-                if not os.path.exists(assets_pdf_path):
-                    import shutil
-                    os.makedirs("assets/Wedstrijdverslagen", exist_ok=True)
-                    shutil.copy2(pdf_full_path, assets_pdf_path)
-                iframe_src = f"/assets/Wedstrijdverslagen/{pdf_filename}"
-            else:
-                iframe_src = f"/assets/Wedstrijdverslagen/{pdf_filename}"
-            
+        if os.path.exists(pdf_path):
             # Create a download link for the PDF
             return html.Div([
                 html.H5(f"Wedstrijdverslag voor {selected_date}", className="mb-3"),
                 html.Iframe(
-                    src=iframe_src,
+                    src=f"/assets/Wedstrijdverslagen/{pdf_filename}",
                     width="100%",
                     height="600px",
                     style={"border": "1px solid #ddd", "borderRadius": "5px"}
@@ -2023,7 +1684,7 @@ def handle_game_pdf_selection(selected_date):
         else:
             return html.Div([
                 html.H5(f"Wedstrijd {selected_date}", className="mb-3"),
-                html.P(f"PDF bestand niet gevonden: {pdf_full_path}", className="text-danger")
+                html.P(f"PDF bestand niet gevonden: {pdf_path}", className="text-danger")
             ])
     else:
         return html.Div([
@@ -2415,13 +2076,6 @@ def handle_member_deletions(previous_data, current_data):
     return no_update
 
 # Print functionality is now handled by JavaScript in the HTML template
-
-# Initialize data on startup
-print("=== Initializing App ===")
-test_render_storage()
-sync_existing_data_to_persistent()
-load_current_data()
-print("=== App Initialization Complete ===")
 
 if __name__ == "__main__":
     print("Starting Dash app...")
