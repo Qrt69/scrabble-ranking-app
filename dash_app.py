@@ -207,47 +207,33 @@ def get_available_seasons():
     """Get list of available season files"""
     seasons = []
     
-    print("=== Scanning for Excel files ===")
-    
-    # List all files in current directory
-    all_files = os.listdir('.')
-    excel_files = [f for f in all_files if f.endswith('.xlsx')]
-    print(f"All Excel files found: {excel_files}")
-    
     # Look for regular season files (Globaal YYYY-YYYY.xlsx)
     globaal_files = glob.glob("Globaal *.xlsx")
-    print(f"Globaal files found: {globaal_files}")
     for file in globaal_files:
-        # Extract year range from filename (handle extra spaces)
+        # Extract year range from filename
         try:
-            year_range = file.replace("Globaal ", "").replace(".xlsx", "").strip()
+            year_range = file.replace("Globaal ", "").replace(".xlsx", "")
             seasons.append({
                 "label": f"Seizoen {year_range}",
                 "value": file
             })
-            print(f"Added season: {file}")
-        except Exception as e:
-            print(f"Error processing {file}: {e}")
+        except:
             continue
     
     # Look for summer files (Zomer YYYY.xlsx)
     zomer_files = glob.glob("Zomer *.xlsx")
-    print(f"Zomer files found: {zomer_files}")
     for file in zomer_files:
         try:
-            year = file.replace("Zomer ", "").replace(".xlsx", "").strip()
+            year = file.replace("Zomer ", "").replace(".xlsx", "")
             seasons.append({
                 "label": f"Zomer {year}",
                 "value": file
             })
-            print(f"Added season: {file}")
-        except Exception as e:
-            print(f"Error processing {file}: {e}")
+        except:
             continue
     
     # Sort by filename for consistent ordering
     seasons.sort(key=lambda x: x["value"])
-    print(f"Final seasons list: {[s['value'] for s in seasons]}")
     return seasons
 
 def get_current_season_filename():
@@ -273,11 +259,7 @@ def load_data_for_season(filename):
     """Load data from a specific season file"""
     global df_global, df_gen_info, df_pct_final, df_rp_final, df_pts_final
     
-    print(f"=== Loading data from {filename} ===")
-    print(f"File exists: {os.path.exists(filename)}")
-    
     if not os.path.exists(filename):
-        print(f"✗ File not found: {filename}")
         # No data available
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
@@ -335,30 +317,22 @@ def load_current_data():
     """Load data from the current season file"""
     global df_global, df_gen_info, df_pct_final, df_rp_final, df_pts_final, current_filename, available_seasons
     
-    print("=== Loading Current Data ===")
-    
     # Get available seasons
     available_seasons = get_available_seasons()
-    print(f"Available seasons: {[s['value'] for s in available_seasons]}")
     
     current_filename = get_current_season_filename()
-    print(f"Current season filename: {current_filename}")
     
     # Check if current season file exists, otherwise fall back to first available or Globaal.xlsx
     if os.path.exists(current_filename):
         filename = current_filename
-        print(f"✓ Found current season file: {filename}")
     elif available_seasons:
         filename = available_seasons[0]["value"]
         current_filename = filename
-        print(f"✓ Using first available season: {filename}")
     elif os.path.exists("Globaal.xlsx"):
         filename = "Globaal.xlsx"
         current_filename = "Globaal.xlsx"
-        print(f"✓ Using fallback Globaal.xlsx")
     else:
         # No data available
-        print("✗ No data files found")
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
         df_pct_final = pd.DataFrame()
@@ -366,7 +340,6 @@ def load_current_data():
         df_pts_final = pd.DataFrame()
         return
     
-    print(f"Loading data from: {filename}")
     load_data_for_season(filename)
 
 # Load initial data
@@ -385,31 +358,20 @@ def load_member_data():
         except Exception as e:
             print(f"Error loading members.json: {e}")
     
-    # If JSON doesn't exist, create sample data
-    print("No members.json found - creating sample data")
-    sample_members = [
-        {'Naam': 'TORREELE Ronald', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'VANDENBERGHE Riet', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'FARASYN Kurt', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'DEWILDE Marc', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'VANDEWALLE Patrick', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'VANDEWALLE Dirk', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'VANDEWALLE Geert', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'VANDEWALLE Koen', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'VANDEWALLE Luc', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'VANDEWALLE Marc', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'VANDEWALLE Peter', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'VANDEWALLE Rik', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'VANDEWALLE Stefaan', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'VANDEWALLE Tom', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'VANDEWALLE Wim', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'VANDEWALLE Yves', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'VANDEWALLE Zeger', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'VANDEWALLE Zeger', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'}
-    ]
-    df_leden = pd.DataFrame(sample_members)
-    save_member_data(df_leden)
-    return df_leden
+    # If JSON doesn't exist, create from Excel file
+    if os.path.exists("Info.xlsx"):
+        try:
+            df_leden = pd.read_excel("Info.xlsx", sheet_name="Leden")
+            df_leden.rename(columns={'NAAM': 'Naam'}, inplace=True)
+            
+            # Save to JSON for future use
+            save_member_data(df_leden)
+            return df_leden
+        except Exception as e:
+            print(f"Error loading from Info.xlsx: {e}")
+    
+    # Return empty DataFrame if no data available
+    return pd.DataFrame(columns=['Naam', 'CLUB', 'KLASSE'])
 
 def save_member_data(df):
     """Save member data to JSON file"""
@@ -1432,30 +1394,12 @@ def process_upload(date, contents, filename):
     except Exception as e:
         return f'Fout bij het lezen van het CSV-bestand: {e}'
     
-    # Get the current member data (from the editable table)
-    global current_member_data
-    if current_member_data is not None:
-        df_leden = pd.DataFrame(current_member_data)
-        print(f"Using current member table data: {len(df_leden)} members")
-    else:
-        df_leden = load_member_data()
-        print(f"Using loaded member data: {len(df_leden)} members")
-    
-    # Extract player names from the uploaded CSV to validate against member data
-    player_columns = [col for col in df.columns if col.startswith('P') and col[1:].isdigit()]
-    if player_columns:
-        players_in_csv = []
-        for col in player_columns:
-            players_in_csv.extend(df[col].dropna().unique())
-        unique_players_in_csv = list(set(players_in_csv))
-        print(f"Players found in uploaded CSV: {unique_players_in_csv}")
-        
-        # Check if all players exist in member data
-        member_names = df_leden['Naam'].tolist()
-        missing_players = [p for p in unique_players_in_csv if p not in member_names]
-        if missing_players:
-            print(f"Warning: Players not found in member data: {missing_players}")
-            print("These players will be processed with default club/class info")
+    # Read supporting Excel file for leden
+    try:
+        df_leden = pd.read_excel('Info.xlsx', sheet_name='Leden')
+        df_leden.rename(columns={'NAAM': 'Naam'}, inplace=True)
+    except Exception as e:
+        return f'Fout bij het lezen van Info.xlsx: {e}'
     
     # Always determine the season filename based on the uploaded date
     season_filename = get_season_filename(date_str)

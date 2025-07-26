@@ -1,63 +1,62 @@
 import pandas as pd
 import numpy as np
 from numpy.ma.extras import row_stack
+from setuptools.command.bdist_egg import walk_egg
 
 # General settings
 pd.options.display.float_format = '{:.2f}'.format
+
+
 def calculate_summer_percentage(df_received):
     """
     Calculate percentage for summer competition using best 5 games rule.
     For players with 5 games or fewer: use all games
     For players with 6+ games: use average of best 5 percentage scores
     """
-    try:
-        # Filter out players without valid class (A, B, or C)
-        valid_classes = ['A', 'B', 'C']
-        df_filtered = df_received[df_received['KLASSE'].isin(valid_classes)].copy()
+    # Filter out players without valid class (A, B, or C)
+    valid_classes = ['A', 'B', 'C']
+    df_filtered = df_received[df_received['KLASSE'].isin(valid_classes)].copy()
+    
+    summer_percentages = []
+    
+    for _, player_data in df_filtered.groupby('Naam'):
+        games_played = len(player_data)
         
-        summer_percentages = []
+        # Calculate normal percentage (all games)
+        total_score = player_data['Totaal'].sum()
+        total_max = player_data['TheoMax'].sum()
+        normal_percentage = (total_score / total_max) * 100 if total_max > 0 else 0
         
-        for _, player_data in df_filtered.groupby('Naam'):
-            games_played = len(player_data)
-            
-            # Calculate normal percentage (all games)
-            total_score = player_data['Totaal'].sum()
-            total_max = player_data['TheoMax'].sum()
-            normal_percentage = (total_score / total_max) * 100 if total_max > 0 else 0
-            
-            # Calculate summer rule percentage
-            if games_played <= 5:
-                # Use all games (same as normal)
-                summer_percentage = normal_percentage
-            else:
-                # Use best 5 games
-                game_percentages = (player_data['Totaal'] / player_data['TheoMax'] * 100).fillna(0)
-                best_5_percentages = game_percentages.sort_values(ascending=False).head(5)
-                summer_percentage = best_5_percentages.mean()
-            
-            summer_percentages.append({
-                'Naam': player_data['Naam'].iloc[0],
-                'Klasse': player_data['KLASSE'].iloc[0],
-                'Wedstrijden': games_played,
-                'Tot. T. MAX': player_data['TheoMax'].sum(),
-                'Tot. Score': player_data['Totaal'].sum(),
-                '% (Alle)': round(normal_percentage, 2),
-                '% (Beste 5)': round(summer_percentage, 2),
-                'Gem. RP': player_data['RP'].mean(),
-                'Tot. punten': player_data['Punten'].sum(),
-                'Scrabbles': player_data['Scrabbles'].sum(),
-                "Solo's": player_data["Solo's"].sum(),
-                'S.scr': player_data['Soloscrabbles'].sum(),
-                'Nulscores': player_data['Nulscores'].sum(),
-                'Tot. beurten': player_data['Beurten'].sum(),
-                'Max. scores': player_data['Maxes'].sum(),
-                '% max.': round((player_data['Maxes'].sum() / player_data['Beurten'].sum()) * 100, 2) if player_data['Beurten'].sum() > 0 else 0
-            })
+        # Calculate summer rule percentage
+        if games_played <= 5:
+            # Use all games (same as normal)
+            summer_percentage = normal_percentage
+        else:
+            # Use best 5 games
+            game_percentages = (player_data['Totaal'] / player_data['TheoMax'] * 100).fillna(0)
+            best_5_percentages = game_percentages.sort_values(ascending=False).head(5)
+            summer_percentage = best_5_percentages.mean()
         
-        return pd.DataFrame(summer_percentages)
-    except Exception as e:
-        print(f"Error in calculate_summer_percentage: {e}")
-        return pd.DataFrame()
+        summer_percentages.append({
+            'Naam': player_data['Naam'].iloc[0],
+            'Klasse': player_data['KLASSE'].iloc[0],
+            'Wedstrijden': games_played,
+            'Tot. T. MAX': player_data['TheoMax'].sum(),
+            'Tot. Score': player_data['Totaal'].sum(),
+            '% (Alle)': round(normal_percentage, 2),
+            '% (Beste 5)': round(summer_percentage, 2),
+            'Gem. RP': player_data['RP'].mean(),
+            'Tot. punten': player_data['Punten'].sum(),
+            'Scrabbles': player_data['Scrabbles'].sum(),
+            "Solo's": player_data["Solo's"].sum(),
+            'S.scr': player_data['Soloscrabbles'].sum(),
+            'Nulscores': player_data['Nulscores'].sum(),
+            'Tot. beurten': player_data['Beurten'].sum(),
+            'Max. scores': player_data['Maxes'].sum(),
+            '% max.': round((player_data['Maxes'].sum() / player_data['Beurten'].sum()) * 100, 2) if player_data['Beurten'].sum() > 0 else 0
+        })
+    
+    return pd.DataFrame(summer_percentages)
 
 
 def process_uitgebreid(dfp_uitgebreid,row_wedstrijdinfo, dfp_leden, pwedstrijd):
@@ -115,50 +114,46 @@ def process_uitgebreid(dfp_uitgebreid,row_wedstrijdinfo, dfp_leden, pwedstrijd):
     return df_to_return
 
 def give_gen_info(df_received):
-    try:
-        # Filter out players without valid class (A, B, or C)
-        valid_classes = ['A', 'B', 'C']
-        df_filtered = df_received[df_received['KLASSE'].isin(valid_classes)].copy()
-        
-        df_grouped_algemeen = (df_filtered
-                               .groupby(['Naam', 'KLASSE'])
-                               .agg(games_played = ('Totaal', 'count'),
-                                    total_max = ('TheoMax', 'sum'),
-                                    total_score = ('Totaal', 'sum'),
-                                    scrabbles_found = ('Scrabbles', 'sum'),
-                                    avg_ranking  = ('RP', 'mean'),
-                                    zeros = ('Nulscores', 'sum'),
-                                    solos = ("Solo's", 'sum'),
-                                    sscr = ('Soloscrabbles', 'sum'),
-                                    beurten = ('Beurten', 'sum'),
-                                    maxes = ('Maxes', 'sum'),
-                                    punten = ('Punten', 'sum'))
-                               .assign(Percentage=lambda x: round((x['total_score'] / x['total_max']) * 100, 2))
-                               .assign(maxperc=lambda x: round((x['maxes'] / x['beurten']) * 100, 2) )
-                               .reset_index()
-                               .rename(columns={
-                                        'KLASSE' : 'Klasse',
-                                        'games_played' : 'Wedstrijden',
-                                        'total_max' : 'Tot. T. MAX',
-                                        'total_score' : 'Tot. Score',
-                                        'scrabbles_found' : 'Scrabbles',
-                                        'avg_ranking' : 'Gem. RP',
-                                        'zeros' : 'Nulscores',
-                                        'solos' : "Solo's",
-                                        'sscr' : 'S.scr',
-                                        'beurten' : 'Tot. beurten',
-                                        'maxes' : 'Max. scores',
-                                        'maxperc' : '% max.',
-                                        'punten' : 'Tot. punten',
-                                        'Percentage' : '%'})
-                               [['Naam', 'Klasse', 'Wedstrijden', 'Tot. T. MAX', 'Tot. Score', '%', 'Gem. RP',
-                                 'Tot. punten', 'Scrabbles', "Solo's", 'S.scr', 'Nulscores', 'Tot. beurten', 'Max. scores', '% max.']]
-                               )
+    # Filter out players without valid class (A, B, or C)
+    valid_classes = ['A', 'B', 'C']
+    df_filtered = df_received[df_received['KLASSE'].isin(valid_classes)].copy()
+    
+    df_grouped_algemeen = (df_filtered
+                           .groupby(['Naam', 'KLASSE'])
+                           .agg(games_played = ('Totaal', 'count'),
+                                total_max = ('TheoMax', 'sum'),
+                                total_score = ('Totaal', 'sum'),
+                                scrabbles_found = ('Scrabbles', 'sum'),
+                                avg_ranking  = ('RP', 'mean'),
+                                zeros = ('Nulscores', 'sum'),
+                                solos = ("Solo's", 'sum'),
+                                sscr = ('Soloscrabbles', 'sum'),
+                                beurten = ('Beurten', 'sum'),
+                                maxes = ('Maxes', 'sum'),
+                                punten = ('Punten', 'sum'))
+                           .assign(Percentage=lambda x: round((x['total_score'] / x['total_max']) * 100, 2))
+                           .assign(maxperc=lambda x: round((x['maxes'] / x['beurten']) * 100, 2) )
+                           .reset_index()
+                           .rename(columns={
+                                    'KLASSE' : 'Klasse',
+                                    'games_played' : 'Wedstrijden',
+                                    'total_max' : 'Tot. T. MAX',
+                                    'total_score' : 'Tot. Score',
+                                    'scrabbles_found' : 'Scrabbles',
+                                    'avg_ranking' : 'Gem. RP',
+                                    'zeros' : 'Nulscores',
+                                    'solos' : "Solo's",
+                                    'sscr' : 'S.scr',
+                                    'beurten' : 'Tot. beurten',
+                                    'maxes' : 'Max. scores',
+                                    'maxperc' : '% max.',
+                                    'punten' : 'Tot. punten',
+                                    'Percentage' : '%'})
+                           [['Naam', 'Klasse', 'Wedstrijden', 'Tot. T. MAX', 'Tot. Score', '%', 'Gem. RP',
+                             'Tot. punten', 'Scrabbles', "Solo's", 'S.scr', 'Nulscores', 'Tot. beurten', 'Max. scores', '% max.']]
+                           )
 
-        return df_grouped_algemeen
-    except Exception as e:
-        print(f"Error in give_gen_info: {e}")
-        return pd.DataFrame()
+    return df_grouped_algemeen
 
 def make_pivot(dfp, pindex, pcols, pvalues, force_int=False, fill_blank=True):
     """
@@ -175,46 +170,35 @@ def make_pivot(dfp, pindex, pcols, pvalues, force_int=False, fill_blank=True):
     Returns:
         pd.DataFrame: Pivot table.
     """
-    try:
-        # Create the pivot table
-        pivot_to_return = dfp.pivot(index=pindex, columns=pcols, values=pvalues)
+    # Create the pivot table
+    pivot_to_return = dfp.pivot(index=pindex, columns=pcols, values=pvalues)
 
-        # Convert column headers to datetime for sorting
-        pivot_to_return.columns = pd.to_datetime(pivot_to_return.columns, dayfirst=True)
+    # Convert column headers to datetime for sorting
+    pivot_to_return.columns = pd.to_datetime(pivot_to_return.columns, dayfirst=True)
 
-        # Sort columns in ascending order
-        pivot_to_return = pivot_to_return.sort_index(axis=1)
+    # Sort columns in ascending order
+    pivot_to_return = pivot_to_return.sort_index(axis=1)
 
-        # Format the column names back to desired format
-        pivot_to_return.columns = pivot_to_return.columns.strftime('%d/%m/%Y')
+    # Format the column names back to desired format
+    pivot_to_return.columns = pivot_to_return.columns.strftime('%d/%m/%Y')
 
-        # Replace NaN with blanks or integers as needed
-        if force_int:
-            # Replace NaN with blanks and cast only non-empty cells to integers
-            pivot_to_return = pivot_to_return.map(
-                lambda x: int(x) if pd.notna(x) else ''
-            )
-        elif fill_blank:
-            # Round numeric values to 2 decimal places and format as strings before filling blanks
-            pivot_to_return = pivot_to_return.round(2)
-            pivot_to_return = pivot_to_return.map(lambda x: f"{float(x):.2f}" if pd.notnull(x) and x != '' and str(x).replace('.', '').replace('-', '').isdigit() else x)
-            pivot_to_return = pivot_to_return.fillna('')  # Replace NaN with blank strings
+    # Replace NaN with blanks or integers as needed
+    if force_int:
+        # Replace NaN with blanks and cast only non-empty cells to integers
+        pivot_to_return = pivot_to_return.map(
+            lambda x: int(x) if pd.notna(x) else ''
+        )
+    elif fill_blank:
+        # Round numeric values to 2 decimal places and format as strings before filling blanks
+        pivot_to_return = pivot_to_return.round(2)
+        pivot_to_return = pivot_to_return.map(lambda x: f"{float(x):.2f}" if pd.notnull(x) and x != '' and str(x).replace('.', '').replace('-', '').isdigit() else x)
+        pivot_to_return = pivot_to_return.fillna('')  # Replace NaN with blank strings
 
-        return pivot_to_return
-    except Exception as e:
-        print(f"Error in make_pivot: {e}")
-        # Return empty DataFrame if there's an error
-        return pd.DataFrame()
+    return pivot_to_return
 
 
 def process_final_df(df_global, pivot_df, columns, sort_by):
-    # Only select columns that actually exist in df_global
-    available_columns = [col for col in columns if col in df_global.columns]
-    if not available_columns:
-        # If no columns are available, return empty DataFrame
-        return pd.DataFrame()
-    
-    df_for_processing = df_global[available_columns]
+    df_for_processing = df_global[columns]
     result = (pd.merge(df_for_processing, pivot_df, on='Naam', how='left')
               .sort_values(by=sort_by, ascending=False)
               .reset_index(drop=True)
