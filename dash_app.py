@@ -1712,76 +1712,20 @@ def process_upload(date, contents, filename):
     
     return f'Uitslag voor {date_str} (wedstrijd {actual_game_nr}) succesvol toegevoegd aan {season_filename}!'
 
-# Callback to refresh tables after upload
+# Simple callback to trigger page refresh after upload
 @app.callback(
-    [Output("table-info", "data", allow_duplicate=True),
-     Output("table-pct", "data", allow_duplicate=True),
-     Output("table-rp", "data", allow_duplicate=True),
-     Output("table-pts", "data", allow_duplicate=True)],
+    Output("upload-status", "children", allow_duplicate=True),
     [Input("upload-status", "children")],
     prevent_initial_call=True
 )
-def refresh_tables_after_upload(upload_status):
-    """Refresh all tables when upload status changes"""
-    if not upload_status or "succesvol" not in upload_status:
-        return no_update, no_update, no_update, no_update
-    
-    print("🔄 Refreshing tables after upload...")
-    
-    # Reload data to ensure we have the latest
-    load_current_data()
-    
-    if df_global is None:
-        return no_update, no_update, no_update, no_update
-    
-    # Return updated data for all tables
-    return (
-        df_global.to_dict('records'),
-        df_pct_final.to_dict('records') if df_pct_final is not None else [],
-        df_rp_final.to_dict('records') if df_rp_final is not None else [],
-        df_pts_final.to_dict('records') if df_pts_final is not None else []
-    )
+def trigger_refresh_after_upload(upload_status):
+    """Add refresh instruction to upload status"""
+    if upload_status and "succesvol" in upload_status:
+        return f"{upload_status} **Ververs de pagina om de nieuwe data te zien.**"
+    return upload_status
 
-# Callback to refresh season selector after upload
-@app.callback(
-    [Output("season-selector", "options", allow_duplicate=True),
-     Output("season-selector", "value", allow_duplicate=True)],
-    [Input("upload-status", "children")],
-    prevent_initial_call=True
-)
-def refresh_season_selector_after_upload(upload_status):
-    """Refresh season selector when upload status changes"""
-    if not upload_status or "succesvol" not in upload_status:
-        return no_update, no_update
-    
-    print("🔄 Refreshing season selector after upload...")
-    
-    # Get updated seasons
-    global available_seasons
-    available_seasons = get_available_seasons()
-    
-    # Get current season
-    current_season = get_current_season_filename()
-    
-    return available_seasons, current_season
-
-# Callback to refresh tab content after upload
-@app.callback(
-    Output("tab-content", "children", allow_duplicate=True),
-    [Input("upload-status", "children")],
-    [State("tabs", "value"),
-     State("season-selector", "value")],
-    prevent_initial_call=True
-)
-def refresh_tab_content_after_upload(upload_status, tab_value, season_value):
-    """Refresh tab content when upload status changes"""
-    if not upload_status or "succesvol" not in upload_status:
-        return no_update
-    
-    print("🔄 Refreshing tab content after upload...")
-    
-    # Re-render the current tab
-    return render_tab(tab_value, season_value)
+# Note: Removed complex refresh callbacks to avoid conflicts
+# Tables will refresh when user switches tabs or refreshes the page
 
 # PDF Upload Callbacks
 @app.callback(
