@@ -5,7 +5,7 @@ from numpy.ma.extras import row_stack
 # General settings
 pd.options.display.float_format = '{:.2f}'.format
 
-
+#push
 def calculate_summer_percentage(df_received):
     """
     Calculate percentage for summer competition using best 5 games rule.
