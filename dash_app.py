@@ -536,6 +536,42 @@ def test_dropbox_connection():
         print(f"✗ Dropbox connection error: {e}")
         return False
 
+# Game data storage functions (define before load_current_data)
+def save_game_data(df, season_name):
+    """Save game data to Dropbox"""
+    data = df.to_dict('records')
+    filename = f"{season_name.lower().replace(' ', '_')}.json"
+    return save_to_dropbox(data, filename, 'json')
+
+def load_game_data(season_name):
+    """Load game data from Dropbox"""
+    filename = f"{season_name.lower().replace(' ', '_')}.json"
+    data = load_from_dropbox(filename, 'json')
+    if data:
+        return pd.DataFrame(data)
+    return None
+
+def get_available_seasons_from_dropbox():
+    """Get list of available seasons from Dropbox"""
+    files = list_dropbox_files()
+    seasons = []
+    
+    for file in files:
+        if file.endswith('.json') and file != 'members.json':
+            # Convert filename back to season name
+            season_name = file.replace('.json', '').replace('_', ' ').title()
+            if 'zomer' in season_name.lower():
+                season_name = season_name.replace('Zomer', 'Zomer')
+            elif 'seizoen' in season_name.lower():
+                season_name = season_name.replace('Seizoen', 'Seizoen')
+            
+            seasons.append({
+                "label": season_name,
+                "value": season_name
+            })
+    
+    return seasons
+
 # Test Dropbox connection
 dropbox_available = test_dropbox_connection()
 
@@ -606,41 +642,7 @@ def save_member_data(df):
     
     return dropbox_success or local_success
 
-# Game data storage functions
-def save_game_data(df, season_name):
-    """Save game data to Dropbox"""
-    data = df.to_dict('records')
-    filename = f"{season_name.lower().replace(' ', '_')}.json"
-    return save_to_dropbox(data, filename, 'json')
 
-def load_game_data(season_name):
-    """Load game data from Dropbox"""
-    filename = f"{season_name.lower().replace(' ', '_')}.json"
-    data = load_from_dropbox(filename, 'json')
-    if data:
-        return pd.DataFrame(data)
-    return None
-
-def get_available_seasons_from_dropbox():
-    """Get list of available seasons from Dropbox"""
-    files = list_dropbox_files()
-    seasons = []
-    
-    for file in files:
-        if file.endswith('.json') and file != 'members.json':
-            # Convert filename back to season name
-            season_name = file.replace('.json', '').replace('_', ' ').title()
-            if 'zomer' in season_name.lower():
-                season_name = season_name.replace('Zomer', 'Zomer')
-            elif 'seizoen' in season_name.lower():
-                season_name = season_name.replace('Seizoen', 'Seizoen')
-            
-            seasons.append({
-                "label": season_name,
-                "value": season_name
-            })
-    
-    return seasons
 
 # Load member data
 df_leden = load_member_data()
