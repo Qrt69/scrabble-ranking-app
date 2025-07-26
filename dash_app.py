@@ -1707,7 +1707,81 @@ def process_upload(date, contents, filename):
     # Get the actual game number that was assigned
     actual_game_nr = df_new[df_new['Datum'] == date_str]['GameNr'].iloc[0]
     
+    print(f"✓ Upload successful: {date_str} (game {actual_game_nr})")
+    print(f"✓ Current data has {len(df_global) if df_global is not None else 0} rows")
+    
     return f'Uitslag voor {date_str} (wedstrijd {actual_game_nr}) succesvol toegevoegd aan {season_filename}!'
+
+# Callback to refresh tables after upload
+@app.callback(
+    [Output("table-info", "data", allow_duplicate=True),
+     Output("table-pct", "data", allow_duplicate=True),
+     Output("table-rp", "data", allow_duplicate=True),
+     Output("table-pts", "data", allow_duplicate=True)],
+    [Input("upload-status", "children")],
+    prevent_initial_call=True
+)
+def refresh_tables_after_upload(upload_status):
+    """Refresh all tables when upload status changes"""
+    if not upload_status or "succesvol" not in upload_status:
+        return no_update, no_update, no_update, no_update
+    
+    print("🔄 Refreshing tables after upload...")
+    
+    # Reload data to ensure we have the latest
+    load_current_data()
+    
+    if df_global is None:
+        return no_update, no_update, no_update, no_update
+    
+    # Return updated data for all tables
+    return (
+        df_global.to_dict('records'),
+        df_pct_final.to_dict('records') if df_pct_final is not None else [],
+        df_rp_final.to_dict('records') if df_rp_final is not None else [],
+        df_pts_final.to_dict('records') if df_pts_final is not None else []
+    )
+
+# Callback to refresh season selector after upload
+@app.callback(
+    [Output("season-selector", "options", allow_duplicate=True),
+     Output("season-selector", "value", allow_duplicate=True)],
+    [Input("upload-status", "children")],
+    prevent_initial_call=True
+)
+def refresh_season_selector_after_upload(upload_status):
+    """Refresh season selector when upload status changes"""
+    if not upload_status or "succesvol" not in upload_status:
+        return no_update, no_update
+    
+    print("🔄 Refreshing season selector after upload...")
+    
+    # Get updated seasons
+    global available_seasons
+    available_seasons = get_available_seasons()
+    
+    # Get current season
+    current_season = get_current_season_filename()
+    
+    return available_seasons, current_season
+
+# Callback to refresh tab content after upload
+@app.callback(
+    Output("tab-content", "children", allow_duplicate=True),
+    [Input("upload-status", "children")],
+    [State("tabs", "value"),
+     State("season-selector", "value")],
+    prevent_initial_call=True
+)
+def refresh_tab_content_after_upload(upload_status, tab_value, season_value):
+    """Refresh tab content when upload status changes"""
+    if not upload_status or "succesvol" not in upload_status:
+        return no_update
+    
+    print("🔄 Refreshing tab content after upload...")
+    
+    # Re-render the current tab
+    return render_tab(tab_value, season_value)
 
 # PDF Upload Callbacks
 @app.callback(
@@ -2397,6 +2471,13 @@ def handle_member_deletions(previous_data, current_data):
     return no_update
 
 # Print functionality is now handled by JavaScript in the HTML template
+
+# Initialize data on startup
+print("=== Initializing App ===")
+test_render_storage()
+sync_existing_data_to_persistent()
+load_current_data()
+print("=== App Initialization Complete ===")
 
 if __name__ == "__main__":
     print("Starting Dash app...")
