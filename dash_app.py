@@ -50,21 +50,6 @@ def sync_pdf_files():
 # Sync PDF files on startup
 sync_pdf_files()
 
-def get_persistent_data_dir():
-    """Get the persistent data directory for storing uploaded files"""
-    # On Render.com, use /opt/render/project/src/data
-    # Locally, use ./data
-    if os.environ.get("RENDER"):
-        # We're on Render
-        data_dir = "/opt/render/project/src/data"
-    else:
-        # We're running locally
-        data_dir = "./data"
-    
-    # Create the directory if it doesn't exist
-    os.makedirs(data_dir, exist_ok=True)
-    return data_dir
-
 # Global variables to store current data
 df_global = None
 df_gen_info = None
@@ -222,48 +207,33 @@ def get_available_seasons():
     """Get list of available season files"""
     seasons = []
     
-    # Get persistent data directory
-    data_dir = get_persistent_data_dir()
-    
-    # Look for regular season files (Globaal YYYY-YYYY.xlsx) - prioritize persistent storage
-    persistent_globaal_files = glob.glob(os.path.join(data_dir, "Globaal *.xlsx"))
-    current_globaal_files = glob.glob("Globaal *.xlsx")
-    
-    # Combine and deduplicate, prioritizing persistent storage
-    all_globaal_files = list(set(persistent_globaal_files + current_globaal_files))
-    
-    for file in all_globaal_files:
+    # Look for regular season files (Globaal YYYY-YYYY.xlsx)
+    globaal_files = glob.glob("Globaal *.xlsx")
+    for file in globaal_files:
         # Extract year range from filename
         try:
-            filename = os.path.basename(file)
-            year_range = filename.replace("Globaal ", "").replace(".xlsx", "")
+            year_range = file.replace("Globaal ", "").replace(".xlsx", "")
             seasons.append({
                 "label": f"Seizoen {year_range}",
-                "value": file  # Use full path
+                "value": file
             })
         except:
             continue
     
-    # Look for summer files (Zomer YYYY.xlsx) - prioritize persistent storage
-    persistent_zomer_files = glob.glob(os.path.join(data_dir, "Zomer *.xlsx"))
-    current_zomer_files = glob.glob("Zomer *.xlsx")
-    
-    # Combine and deduplicate, prioritizing persistent storage
-    all_zomer_files = list(set(persistent_zomer_files + current_zomer_files))
-    
-    for file in all_zomer_files:
+    # Look for summer files (Zomer YYYY.xlsx)
+    zomer_files = glob.glob("Zomer *.xlsx")
+    for file in zomer_files:
         try:
-            filename = os.path.basename(file)
-            year = filename.replace("Zomer ", "").replace(".xlsx", "")
+            year = file.replace("Zomer ", "").replace(".xlsx", "")
             seasons.append({
                 "label": f"Zomer {year}",
-                "value": file  # Use full path
+                "value": file
             })
         except:
             continue
     
     # Sort by filename for consistent ordering
-    seasons.sort(key=lambda x: os.path.basename(x["value"]))
+    seasons.sort(key=lambda x: x["value"])
     return seasons
 
 def get_current_season_filename():
@@ -352,47 +322,15 @@ def load_current_data():
     
     current_filename = get_current_season_filename()
     
-    print(f"=== Loading Current Data ===")
-    print(f"Available seasons: {[s['label'] for s in available_seasons]}")
-    print(f"Current filename: {current_filename}")
-    
-    # Get the persistent data directory
-    data_dir = get_persistent_data_dir()
-    persistent_path = os.path.join(data_dir, os.path.basename(current_filename))
-    
-    print(f"Persistent path: {persistent_path}")
-    print(f"Persistent exists: {os.path.exists(persistent_path)}")
-    print(f"Current exists: {os.path.exists(current_filename)}")
-    
-    # ALWAYS prioritize persistent storage
-    if os.path.exists(persistent_path):
-        filename = persistent_path
-        print(f"✓ Using persistent file: {persistent_path}")
-    elif os.path.exists(current_filename):
+    # Check if current season file exists, otherwise fall back to first available or Globaal.xlsx
+    if os.path.exists(current_filename):
         filename = current_filename
-        print(f"✓ Using current directory file: {current_filename}")
     elif available_seasons:
-        # Try to find the season file in persistent storage
-        season_value = available_seasons[0]["value"]
-        persistent_season_path = os.path.join(data_dir, os.path.basename(season_value))
-        if os.path.exists(persistent_season_path):
-            filename = persistent_season_path
-            current_filename = persistent_season_path
-            print(f"✓ Using persistent season file: {persistent_season_path}")
-        else:
-            filename = season_value
-            current_filename = season_value
-            print(f"✓ Using available season: {season_value}")
+        filename = available_seasons[0]["value"]
+        current_filename = filename
     elif os.path.exists("Globaal.xlsx"):
-        persistent_globaal = os.path.join(data_dir, "Globaal.xlsx")
-        if os.path.exists(persistent_globaal):
-            filename = persistent_globaal
-            current_filename = persistent_globaal
-            print(f"✓ Using persistent Globaal.xlsx: {persistent_globaal}")
-        else:
-            filename = "Globaal.xlsx"
-            current_filename = "Globaal.xlsx"
-            print(f"✓ Using current Globaal.xlsx")
+        filename = "Globaal.xlsx"
+        current_filename = "Globaal.xlsx"
     else:
         # No data available
         df_global = pd.DataFrame()
@@ -400,10 +338,8 @@ def load_current_data():
         df_pct_final = pd.DataFrame()
         df_rp_final = pd.DataFrame()
         df_pts_final = pd.DataFrame()
-        print("✗ No data files found")
         return
     
-    print(f"Loading data from: {filename}")
     load_data_for_season(filename)
 
 # Load initial data
@@ -1448,17 +1384,10 @@ def handle_csv_upload(contents, filename):
 @app.callback(
     Output('upload-status', 'children'),
     [Input('upload-date-picker-visible', 'date')],
-    [State('upload-csv', 'contents'), State('upload-csv', 'filename')],
-    prevent_initial_call=True
+    [State('upload-csv', 'contents'), State('upload-csv', 'filename')]
 )
 def process_upload(date, contents, filename):
-    print(f"=== UPLOAD CALLBACK TRIGGERED ===")
-    print(f"Date: {date}")
-    print(f"Contents: {'Yes' if contents else 'No'}")
-    print(f"Filename: {filename}")
-    
     if not date or not contents:
-        print("Missing date or contents - returning empty")
         return ''
     
     # Convert date from ISO to DD/MM/YYYY
@@ -1504,43 +1433,21 @@ def process_upload(date, contents, filename):
     # Always determine the season filename based on the uploaded date
     season_filename = get_season_filename(date_str)
     
-    # Get the persistent data directory and create the full path
-    data_dir = get_persistent_data_dir()
-    persistent_season_path = os.path.join(data_dir, season_filename)
-    
-    print(f"Upload processing for date: {date_str}")
-    print(f"Season filename: {season_filename}")
-    print(f"Persistent path: {persistent_season_path}")
-    
     # Check for duplicates and assign volgnummer
-    # First check persistent storage, then fall back to current directory
-    if os.path.exists(persistent_season_path):
-        season_file_to_check = persistent_season_path
-        print(f"✓ Found existing file in persistent storage: {persistent_season_path}")
-    elif os.path.exists(season_filename):
-        season_file_to_check = season_filename
-        print(f"✓ Found existing file in current directory: {season_filename}")
-    else:
-        season_file_to_check = None
-        print(f"✓ No existing file found - will create new file in persistent storage")
-    
-    if season_file_to_check:
+    if os.path.exists(season_filename):
         try:
-            df_season = pd.read_excel(season_file_to_check, sheet_name='Globaal')
-            print(f"✓ Successfully loaded existing data from: {season_file_to_check}")
+            df_season = pd.read_excel(season_filename, sheet_name='Globaal')
         except Exception as e:
-            return f'Fout bij het lezen van {season_file_to_check}: {e}'
+            return f'Fout bij het lezen van {season_filename}: {e}'
         # Check if this date already exists
         if (df_season['Datum'] == date_str).any():
             return f'Deze uitslag voor {date_str} werd al ingelezen in {season_filename}.'
         # Assign volgnummer as one more than the number of unique dates (sorted chronologically)
         unique_dates = sorted(pd.to_datetime(df_season['Datum'], dayfirst=True).unique())
         volgnummer = len(unique_dates) + 1
-        print(f"✓ Assigned volgnummer: {volgnummer}")
     else:
         df_season = None
         volgnummer = 1
-        print(f"✓ New file - assigned volgnummer: {volgnummer}")
     
     # Prepare row_wedstrijdinfo
     row_wedstrijdinfo = {'Datum': date_str, 'Beurten': len([col for col in df.columns if col.startswith('B') and col[1:].isdigit()])}
@@ -1561,19 +1468,10 @@ def process_upload(date, contents, filename):
     df_new['Datum_dt'] = pd.to_datetime(df_new['Datum'], dayfirst=True)
     df_new = assign_smart_game_numbers(df_new)
     
-    # ALWAYS save to persistent storage
-    try:
-        df_new.to_excel(persistent_season_path, sheet_name='Globaal', index=False)
-        print(f"✓ Successfully saved to persistent storage: {persistent_season_path}")
-    except Exception as e:
-        return f'Fout bij het opslaan van {persistent_season_path}: {e}'
-    
-    # Also save to current directory to keep them in sync
     try:
         df_new.to_excel(season_filename, sheet_name='Globaal', index=False)
-        print(f"✓ Also saved to current directory: {season_filename}")
     except Exception as e:
-        print(f"Warning: Could not save to current directory: {e}")
+        return f'Fout bij het opslaan van {season_filename}: {e}'
     
     # Reload data
     load_current_data()
@@ -1741,19 +1639,9 @@ def delete_game(n_clicks, game_nr):
         df_updated['Datum_dt'] = pd.to_datetime(df_updated['Datum'], dayfirst=True)
         df_updated = assign_smart_game_numbers(df_updated)
         
-        # Save updated file to persistent storage
+        # Save updated file
         if current_filename:
-            # Get the persistent data directory
-            data_dir = get_persistent_data_dir()
-            persistent_filename = os.path.join(data_dir, os.path.basename(current_filename))
-            
-            # Save to persistent storage
-            df_updated.to_excel(persistent_filename, sheet_name='Globaal', index=False)
-            print(f"✓ Saved updated file to persistent storage: {persistent_filename}")
-            
-            # Also save to current directory to keep them in sync
             df_updated.to_excel(current_filename, sheet_name='Globaal', index=False)
-            print(f"✓ Also saved to current directory: {current_filename}")
         else:
             return 'Geen bestand geselecteerd voor opslag.', None, []
         
@@ -2219,64 +2107,6 @@ def handle_member_deletions(previous_data, current_data):
 # Print functionality is now handled by JavaScript in the HTML template
 
 if __name__ == "__main__":
-    # Initialize data on startup
-    print("=== Initializing App ===")
-    
-    # Test Render.com storage
-    def test_render_storage():
-        print("=== Testing Render.com Storage ===")
-        render_env = os.environ.get("RENDER")
-        print(f"Running on Render: {render_env}")
-        
-        data_dir = get_persistent_data_dir()
-        print(f"Data directory: {data_dir}")
-        
-        # Test if we can write to the directory
-        test_file = os.path.join(data_dir, "test.txt")
-        try:
-            with open(test_file, 'w') as f:
-                f.write(f"App started at {datetime.now()}")
-            os.remove(test_file)
-            print(f"✓ Storage test successful: App started at {datetime.now()}")
-        except Exception as e:
-            print(f"✗ Storage test failed: {e}")
-    
-    # Sync existing data to persistent storage
-    def sync_existing_data_to_persistent():
-        print("=== Syncing Data to Persistent Storage ===")
-        data_dir = get_persistent_data_dir()
-        files_to_sync = ["Zomer 2025.xlsx", "Globaal 2024-2025.xlsx", "Globaal.xlsx"]
-        for filename in files_to_sync:
-            if os.path.exists(filename):
-                persistent_path = os.path.join(data_dir, filename)
-                if not os.path.exists(persistent_path):
-                    try:
-                        import shutil
-                        shutil.copy2(filename, persistent_path)
-                        print(f"✓ Synced {filename} to persistent storage")
-                    except Exception as e:
-                        print(f"✗ Error syncing {filename}: {e}")
-                else:
-                    try:
-                        import pandas as pd
-                        current_rows = len(pd.read_excel(filename, sheet_name='Globaal'))
-                        persistent_rows = len(pd.read_excel(persistent_path, sheet_name='Globaal'))
-                        if persistent_rows >= current_rows:
-                            print(f"✓ {filename} already exists in persistent storage ({persistent_rows} rows)")
-                        else:
-                            import shutil
-                            shutil.copy2(filename, persistent_path)
-                            print(f"✓ Updated {filename} in persistent storage ({current_rows} rows)")
-                    except Exception as e:
-                        print(f"✗ Error checking {filename}: {e}")
-                        print(f"✓ Keeping existing {filename} in persistent storage")
-    
-    # Run initialization
-    test_render_storage()
-    sync_existing_data_to_persistent()
-    load_current_data()
-    print("=== App Initialization Complete ===")
-    
     print("Starting Dash app...")
     # Use environment variable for port (Render requirement)
     port = int(os.environ.get("PORT", 8050))
