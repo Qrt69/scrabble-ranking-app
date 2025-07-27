@@ -28,15 +28,28 @@ logger = logging.getLogger(__name__)
 DROPBOX_ACCESS_TOKEN = os.environ.get("DROPBOX_TOKEN", "")
 USE_DROPBOX = bool(DROPBOX_ACCESS_TOKEN)
 
+print(f"=== DEBUG: Dropbox configuration ===")
+print(f"=== DEBUG: DROPBOX_TOKEN from env: {'Present' if DROPBOX_ACCESS_TOKEN else 'Missing'} ===")
+print(f"=== DEBUG: USE_DROPBOX: {USE_DROPBOX} ===")
+
 if USE_DROPBOX:
     logger.info("Initializing Dropbox integration...")
-    if dropbox_integration.initialize_dropbox(DROPBOX_ACCESS_TOKEN):
-        logger.info("Dropbox integration successful")
-    else:
-        logger.error("Dropbox integration failed - falling back to local files")
+    print("=== DEBUG: Initializing Dropbox integration ===")
+    try:
+        if dropbox_integration.initialize_dropbox(DROPBOX_ACCESS_TOKEN):
+            logger.info("Dropbox integration successful")
+            print("=== DEBUG: Dropbox integration successful ===")
+        else:
+            logger.error("Dropbox integration failed - falling back to local files")
+            print("=== DEBUG: Dropbox integration failed ===")
+            USE_DROPBOX = False
+    except Exception as e:
+        logger.error(f"Dropbox initialization error: {e} - falling back to local files")
+        print(f"=== DEBUG: Dropbox initialization exception: {e} ===")
         USE_DROPBOX = False
 else:
     logger.info("No Dropbox access token found - using local files only")
+    print("=== DEBUG: No Dropbox token found ===")
 
 importlib.reload(tools)
 
@@ -432,15 +445,66 @@ def load_current_data():
     global df_global, df_gen_info, df_pct_final, df_rp_final, df_pts_final, current_filename, available_seasons
     
     print("=== DEBUG: Inside load_current_data() ===")
+    print(f"=== DEBUG: USE_DROPBOX = {USE_DROPBOX} ===")
+    print(f"=== DEBUG: DROPBOX_ACCESS_TOKEN present = {bool(DROPBOX_ACCESS_TOKEN)} ===")
     
-    # Sync with Dropbox if available
-    if USE_DROPBOX:
-        logger.info("Syncing Excel files from Dropbox...")
+    # For online app, we MUST have Dropbox for persistent storage
+    if not USE_DROPBOX:
+        logger.error("No Dropbox integration available - app cannot function without persistent storage")
+        print("=== DEBUG: Dropbox integration disabled - using local files ===")
+        # Initialize with empty data and show error message
+        df_global = pd.DataFrame()
+        df_gen_info = pd.DataFrame()
+        df_pct_final = pd.DataFrame()
+        df_rp_final = pd.DataFrame()
+        df_pts_final = pd.DataFrame()
+        return
+    
+    # Sync with Dropbox - this is required for online app
+    logger.info("Syncing Excel files from Dropbox...")
+    print("=== DEBUG: Starting Dropbox sync ===")
+    try:
         required_files = ["Globaal 2024-2025.xlsx", "Zomer 2025.xlsx", "Info.xlsx"]
+        print(f"=== DEBUG: Required files: {required_files} ===")
+        
         dropbox_manager = dropbox_integration.get_dropbox_manager()
+        print(f"=== DEBUG: Dropbox manager available: {dropbox_manager is not None} ===")
+        
         if dropbox_manager:
             synced_files = dropbox_manager.sync_excel_files(required_files)
             logger.info(f"Synced {len(synced_files)} files from Dropbox: {synced_files}")
+            print(f"=== DEBUG: Synced files: {synced_files} ===")
+            
+            if not synced_files:
+                logger.error("No files synced from Dropbox - app cannot function")
+                print("=== DEBUG: No files synced from Dropbox ===")
+                # Initialize with empty data
+                df_global = pd.DataFrame()
+                df_gen_info = pd.DataFrame()
+                df_pct_final = pd.DataFrame()
+                df_rp_final = pd.DataFrame()
+                df_pts_final = pd.DataFrame()
+                return
+        else:
+            logger.error("Dropbox manager not available - app cannot function")
+            print("=== DEBUG: Dropbox manager is None ===")
+            # Initialize with empty data
+            df_global = pd.DataFrame()
+            df_gen_info = pd.DataFrame()
+            df_pct_final = pd.DataFrame()
+            df_rp_final = pd.DataFrame()
+            df_pts_final = pd.DataFrame()
+            return
+    except Exception as e:
+        logger.error(f"Dropbox sync error: {e} - app cannot function without data")
+        print(f"=== DEBUG: Dropbox sync exception: {e} ===")
+        # Initialize with empty data
+        df_global = pd.DataFrame()
+        df_gen_info = pd.DataFrame()
+        df_pct_final = pd.DataFrame()
+        df_rp_final = pd.DataFrame()
+        df_pts_final = pd.DataFrame()
+        return
     
     # Get available seasons
     available_seasons = get_available_seasons()
@@ -449,7 +513,7 @@ def load_current_data():
     current_filename = get_current_season_filename()
     print(f"=== DEBUG: Current filename determined: {current_filename} ===")
     
-    # Check if current season file exists, otherwise fall back to first available or Globaal.xlsx
+    # Check if current season file exists
     if os.path.exists(current_filename):
         filename = current_filename
         print(f"=== DEBUG: Using current season file: {filename} ===")
@@ -457,10 +521,6 @@ def load_current_data():
         filename = available_seasons[0]["value"]
         current_filename = filename
         print(f"=== DEBUG: Using first available season: {filename} ===")
-    elif os.path.exists("Globaal.xlsx"):
-        filename = "Globaal.xlsx"
-        current_filename = "Globaal.xlsx"
-        print(f"=== DEBUG: Using fallback file: {filename} ===")
     else:
         print("=== DEBUG: No data files found - initializing with empty data ===")
         # No data available
@@ -505,6 +565,11 @@ def load_member_data():
     """Load member data from JSON file or create from Excel if not exists"""
     json_file = "members.json"
     
+    # For online app, we need Dropbox to have any data
+    if not USE_DROPBOX:
+        logger.error("No Dropbox integration - cannot load member data")
+        return pd.DataFrame()
+    
     if os.path.exists(json_file):
         try:
             with open(json_file, 'r', encoding='utf-8') as f:
@@ -514,7 +579,7 @@ def load_member_data():
         except Exception as e:
             logger.error(f"Error loading members.json: {e}")
     
-    # If JSON doesn't exist, create from Excel file
+    # If JSON doesn't exist, create from Excel file (which should be synced from Dropbox)
     if os.path.exists("Info.xlsx"):
         try:
             df_leden = pd.read_excel("Info.xlsx", sheet_name="Leden")
@@ -527,9 +592,9 @@ def load_member_data():
         except Exception as e:
             logger.error(f"Error loading from Info.xlsx: {e}")
     
-    # Return empty DataFrame if no data available
-    logger.warning("No member data found - creating empty DataFrame")
-    return pd.DataFrame(columns=['Naam', 'CLUB', 'KLASSE'])
+    # No data available
+    logger.warning("No member data available")
+    return pd.DataFrame()
 
 def save_member_data(df):
     """Save member data to JSON file"""
@@ -1618,15 +1683,22 @@ def process_upload(date, contents, filename):
             df_new.to_excel(season_filename, sheet_name='Globaal', index=False)
             logger.info(f"Successfully saved {len(df_new)} rows to {season_filename}")
             
-            # Backup to Dropbox if available
+            # Backup to Dropbox - required for online app
             if USE_DROPBOX:
-                dropbox_manager = dropbox_integration.get_dropbox_manager()
-                if dropbox_manager:
-                    if dropbox_manager.backup_excel_file(season_filename):
-                        logger.info(f"Successfully backed up {season_filename} to Dropbox")
+                try:
+                    dropbox_manager = dropbox_integration.get_dropbox_manager()
+                    if dropbox_manager:
+                        if dropbox_manager.backup_excel_file(season_filename):
+                            logger.info(f"Successfully backed up {season_filename} to Dropbox")
+                        else:
+                            logger.error(f"Failed to backup {season_filename} to Dropbox - data may be lost on restart")
                     else:
-                        logger.warning(f"Failed to backup {season_filename} to Dropbox")
-                        
+                        logger.error("Dropbox manager not available for backup - data may be lost on restart")
+                except Exception as e:
+                    logger.error(f"Dropbox backup error: {e} - data may be lost on restart")
+            else:
+                logger.error("No Dropbox integration - data will be lost on restart")
+            
         except Exception as e:
             logger.error(f"Error saving file: {e}")
             return f'Fout bij het opslaan van {season_filename}: {e}'
@@ -1767,14 +1839,21 @@ def process_pdf_upload(n_clicks, contents, filename):
             with open(assets_pdf_path, 'wb') as f:
                 f.write(decoded)
             
-            # Upload to Dropbox if available
+            # Upload to Dropbox - required for online app
             if USE_DROPBOX:
-                dropbox_manager = dropbox_integration.get_dropbox_manager()
-                if dropbox_manager:
-                    if dropbox_manager.upload_pdf_report(main_pdf_path, date_str):
-                        logger.info(f"Successfully uploaded PDF to Dropbox")
+                try:
+                    dropbox_manager = dropbox_integration.get_dropbox_manager()
+                    if dropbox_manager:
+                        if dropbox_manager.upload_pdf_report(main_pdf_path, date_str):
+                            logger.info(f"Successfully uploaded PDF to Dropbox")
+                        else:
+                            logger.error(f"Failed to upload PDF to Dropbox - file may be lost on restart")
                     else:
-                        logger.warning(f"Failed to upload PDF to Dropbox")
+                        logger.error("Dropbox manager not available for PDF upload - file may be lost on restart")
+                except Exception as e:
+                    logger.error(f"Dropbox PDF upload error: {e} - file may be lost on restart")
+            else:
+                logger.error("No Dropbox integration - PDF will be lost on restart")
             
             # Verify files were saved correctly
             if not os.path.exists(pdf_path):
