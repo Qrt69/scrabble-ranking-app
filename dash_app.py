@@ -388,7 +388,14 @@ for file in excel_files:
             print(f"    Error reading: {e}")
 
 # Load initial data
-load_current_data()
+print("=== DEBUG: About to call load_current_data() ===")
+try:
+    load_current_data()
+    print("=== DEBUG: load_current_data() completed successfully ===")
+except Exception as e:
+    print(f"=== DEBUG: Error in load_current_data(): {e} ===")
+    import traceback
+    print(f"=== DEBUG: Traceback: {traceback.format_exc()} ===")
 
 # Member management functions
 def load_member_data():
