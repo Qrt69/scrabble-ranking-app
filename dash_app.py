@@ -924,29 +924,6 @@ def make_management_tab():
         
         html.Hr(className="my-4"),
         
-        # PDF Management Section
-        html.H4("📄 PDF Verslag Beheer", className="mb-3", style={"color": "#2c3e50"}),
-        html.P("Verwijder PDF verslagen. Dit verwijdert alleen het PDF bestand, niet de wedstrijdgegevens.", className="text-muted mb-3"),
-        
-        html.Div([
-            html.Label("Selecteer PDF verslag om te verwijderen:", className="mb-2"),
-            dcc.Dropdown(
-                id="delete-pdf-dropdown",
-                options=[],
-                placeholder="Kies een PDF verslag...",
-                style={"marginBottom": "20px"}
-            ),
-            html.Button(
-                "Verwijder geselecteerde PDF",
-                id="delete-pdf-btn",
-                className="btn btn-warning",
-                disabled=True
-            ),
-            html.Div(id="delete-pdf-status", className="mt-3")
-        ], className="mb-4"),
-        
-        html.Hr(className="my-4"),
-        
         # Member Management Section
         html.H4("👥 Leden Beheer", className="mb-3", style={"color": "#2c3e50"}),
         html.P("Beheer de leden van de club. Je kunt leden toevoegen, verwijderen en hun klasse wijzigen.", className="text-muted mb-3"),
@@ -2448,96 +2425,6 @@ def handle_member_deletions(previous_data, current_data):
     return no_update
 
 # Print functionality is now handled by JavaScript in the HTML template
-
-# PDF Management Callbacks
-@app.callback(
-    Output("delete-pdf-btn", "disabled"),
-    Input("delete-pdf-dropdown", "value")
-)
-def enable_delete_pdf_button(selected_pdf):
-    return selected_pdf is None
-
-@app.callback(
-    [Output("delete-pdf-status", "children"),
-     Output("delete-pdf-dropdown", "value")],
-    [Input("delete-pdf-btn", "n_clicks")],
-    [State("delete-pdf-dropdown", "value")],
-    prevent_initial_call=True
-)
-def delete_pdf(n_clicks, selected_pdf):
-    if not selected_pdf:
-        return "Geen PDF geselecteerd", None
-    
-    try:
-        # Get the PDF filename from the selected option
-        pdf_filename = selected_pdf
-        
-        # Delete from local storage
-        local_path = os.path.join("Wedstrijdverslagen", pdf_filename)
-        assets_path = os.path.join("assets", "Wedstrijdverslagen", pdf_filename)
-        
-        deleted_files = []
-        
-        # Delete from local Wedstrijdverslagen folder
-        if os.path.exists(local_path):
-            os.remove(local_path)
-            deleted_files.append("local")
-            logger.info(f"Deleted PDF from local storage: {pdf_filename}")
-        
-        # Delete from assets folder
-        if os.path.exists(assets_path):
-            os.remove(assets_path)
-            deleted_files.append("assets")
-            logger.info(f"Deleted PDF from assets: {pdf_filename}")
-        
-        # Delete from Dropbox
-        if USE_DROPBOX:
-            try:
-                dropbox_manager = dropbox_integration.get_dropbox_manager()
-                if dropbox_manager:
-                    dropbox_path = f"{dropbox_manager.app_folder}/Wedstrijdverslagen/{pdf_filename}"
-                    if dropbox_manager.delete_file(dropbox_path):
-                        deleted_files.append("Dropbox")
-                        logger.info(f"Deleted PDF from Dropbox: {pdf_filename}")
-                    else:
-                        logger.error(f"Failed to delete PDF from Dropbox: {pdf_filename}")
-                else:
-                    logger.error("Dropbox manager not available for PDF deletion")
-            except Exception as e:
-                logger.error(f"Dropbox PDF deletion error: {e}")
-        
-        if deleted_files:
-            return f"✅ PDF '{pdf_filename}' succesvol verwijderd uit: {', '.join(deleted_files)}", None
-        else:
-            return f"❌ PDF '{pdf_filename}' kon niet worden verwijderd", None
-            
-    except Exception as e:
-        logger.error(f"Error deleting PDF: {e}")
-        return f"❌ Fout bij verwijderen van PDF: {e}", None
-
-@app.callback(
-    Output("delete-pdf-dropdown", "options"),
-    [Input("tabs", "value")],
-    prevent_initial_call=False  # Allow initial call
-)
-def update_delete_pdf_dropdown_options(tab_value):
-    # Update PDF dropdown options for management tab
-    if tab_value == "management":
-        # Force refresh of PDF list
-        global _pdfs_synced
-        _pdfs_synced = False  # Reset to force sync
-        
-        pdf_mapping = get_available_pdf_reports()
-        logger.info(f"PDF dropdown: Found {len(pdf_mapping)} PDF files")
-        
-        options = [
-            {"label": f"{date} - {filename}", "value": filename}
-            for date, filename in pdf_mapping.items()
-        ]
-        
-        logger.info(f"PDF dropdown options: {options}")
-        return options
-    return []
 
 if __name__ == "__main__":
     print("Starting Dash app...")
