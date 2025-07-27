@@ -344,16 +344,20 @@ def load_current_data():
     logger.info(f"Available seasons: {[s['value'] for s in available_seasons]}")
     
     current_filename = get_current_season_filename()
+    logger.info(f"Current filename determined: {current_filename}")
     
     # Check if current season file exists, otherwise fall back to first available or Globaal.xlsx
     if os.path.exists(current_filename):
         filename = current_filename
+        logger.info(f"Using current season file: {filename}")
     elif available_seasons:
         filename = available_seasons[0]["value"]
         current_filename = filename
+        logger.info(f"Using first available season: {filename}")
     elif os.path.exists("Globaal.xlsx"):
         filename = "Globaal.xlsx"
         current_filename = "Globaal.xlsx"
+        logger.info(f"Using fallback file: {filename}")
     else:
         logger.warning("No data files found - initializing with empty data")
         # No data available
@@ -364,6 +368,7 @@ def load_current_data():
         df_pts_final = pd.DataFrame()
         return
     
+    logger.info(f"About to load data from: {filename}")
     load_data_for_season(filename)
 
 # Debug: Check what files exist
