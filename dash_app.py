@@ -154,6 +154,39 @@ def get_available_pdf_reports():
     """Scan Wedstrijdverslagen folder and return mapping of dates to PDF files"""
     pdf_mapping = {}
     
+    # Sync PDF files from Dropbox if available
+    if USE_DROPBOX:
+        logger.info("Syncing PDF files from Dropbox...")
+        dropbox_manager = dropbox_integration.get_dropbox_manager()
+        if dropbox_manager:
+            # Ensure local directories exist
+            for folder in ["Wedstrijdverslagen", "assets/Wedstrijdverslagen"]:
+                if not os.path.exists(folder):
+                    os.makedirs(folder)
+                    logger.info(f"Created directory: {folder}")
+            
+            # List files in Dropbox
+            dropbox_files = dropbox_manager.list_files()
+            for file_info in dropbox_files:
+                if file_info['name'].endswith('.pdf'):
+                    # Download PDF to local folders
+                    dropbox_path = file_info['path']
+                    local_path = f"Wedstrijdverslagen/{file_info['name']}"
+                    assets_path = f"assets/Wedstrijdverslagen/{file_info['name']}"
+                    
+                    # Download to main folder
+                    if dropbox_manager.download_file(dropbox_path, local_path):
+                        logger.info(f"Downloaded PDF: {file_info['name']}")
+                        
+                        # Also copy to assets folder for web serving
+                        import shutil
+                        try:
+                            shutil.copy2(local_path, assets_path)
+                            logger.info(f"Copied to assets: {file_info['name']}")
+                        except Exception as e:
+                            logger.error(f"Error copying to assets: {e}")
+    
+    # Now scan local Wedstrijdverslagen folder
     if not os.path.exists("Wedstrijdverslagen"):
         logger.warning("Wedstrijdverslagen folder not found")
         return pdf_mapping
@@ -1679,6 +1712,17 @@ def process_pdf_upload(n_clicks, contents, filename):
             main_pdf_path = os.path.join(main_dir, filename_new)
             logger.info(f"Saving to main: {main_pdf_path}")
             with open(main_pdf_path, 'wb') as f:
+                f.write(decoded)
+            
+            # Also save to assets folder for immediate web serving
+            assets_dir = "assets/Wedstrijdverslagen"
+            if not os.path.exists(assets_dir):
+                os.makedirs(assets_dir)
+                logger.info(f"Created assets directory: {assets_dir}")
+            
+            assets_pdf_path = os.path.join(assets_dir, filename_new)
+            logger.info(f"Saving to assets: {assets_pdf_path}")
+            with open(assets_pdf_path, 'wb') as f:
                 f.write(decoded)
             
             # Upload to Dropbox if available
