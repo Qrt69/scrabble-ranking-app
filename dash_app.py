@@ -50,31 +50,57 @@ else:
 importlib.reload(tools)
 
 def sync_pdf_files():
-    """Sync PDF files from Wedstrijdverslagen to assets/Wedstrijdverslagen"""
+    """Sync PDF files from Dropbox to local storage and assets"""
     import shutil
     import glob
     
-    source_dir = "Wedstrijdverslagen"
-    target_dir = "assets/Wedstrijdverslagen"
+    # For online app, we need Dropbox to have any data
+    if not USE_DROPBOX:
+        logger.warning("No Dropbox integration - cannot sync PDF files")
+        return
     
-    # Create target directory if it doesn't exist
-    if not os.path.exists(target_dir):
-        os.makedirs(target_dir)
-    
-    # Get all PDF files from source directory
-    source_files = glob.glob(os.path.join(source_dir, "*.pdf"))
-    
-    # Copy each file to target directory
-    for source_file in source_files:
-        filename = os.path.basename(source_file)
-        target_file = os.path.join(target_dir, filename)
+    try:
+        dropbox_manager = dropbox_integration.get_dropbox_manager()
+        if not dropbox_manager:
+            logger.error("Dropbox manager not available - cannot sync PDF files")
+            return
         
-        # Only copy if target doesn't exist or source is newer
-        if not os.path.exists(target_file) or os.path.getmtime(source_file) > os.path.getmtime(target_file):
-            shutil.copy2(source_file, target_file)
-            logger.info(f"Synced: {filename}")
-    
-    logger.info(f"PDF sync complete. {len(source_files)} files processed.")
+        # Create local directories
+        local_dir = "Wedstrijdverslagen"
+        assets_dir = "assets/Wedstrijdverslagen"
+        
+        for directory in [local_dir, assets_dir]:
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+                logger.info(f"Created directory: {directory}")
+        
+        # List PDF files in Dropbox
+        dropbox_files = dropbox_manager.list_files()
+        pdf_files = [f for f in dropbox_files if f['name'].endswith('.pdf')]
+        
+        logger.info(f"Found {len(pdf_files)} PDF files in Dropbox")
+        
+        # Download each PDF file
+        for pdf_file in pdf_files:
+            filename = pdf_file['name']
+            dropbox_path = f"{dropbox_manager.app_folder}/{filename}"
+            local_path = os.path.join(local_dir, filename)
+            assets_path = os.path.join(assets_dir, filename)
+            
+            # Download to local directory
+            if dropbox_manager.download_file(dropbox_path, local_path):
+                logger.info(f"Downloaded PDF from Dropbox: {filename}")
+                
+                # Copy to assets directory for web serving
+                shutil.copy2(local_path, assets_path)
+                logger.info(f"Copied PDF to assets: {filename}")
+            else:
+                logger.error(f"Failed to download PDF from Dropbox: {filename}")
+        
+        logger.info(f"PDF sync complete. {len(pdf_files)} files processed.")
+        
+    except Exception as e:
+        logger.error(f"Error syncing PDF files: {e}")
 
 # Sync PDF files on startup
 sync_pdf_files()
