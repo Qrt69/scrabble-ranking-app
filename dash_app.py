@@ -1437,6 +1437,7 @@ def process_upload(date, contents, filename):
             return f'Fout bij het lezen van het CSV-bestand: {e}'
         
         # Read supporting Excel file for leden
+        global df_leden  # Move global declaration to the top
         try:
             if os.path.exists('Info.xlsx'):
                 df_leden = pd.read_excel('Info.xlsx', sheet_name='Leden')
@@ -1444,8 +1445,7 @@ def process_upload(date, contents, filename):
             else:
                 # Use global member data if Info.xlsx doesn't exist
                 logger.warning("Info.xlsx not found, using global member data")
-                # Import the global df_leden properly
-                global df_leden
+                # df_leden is already global, so we can use it directly
         except Exception as e:
             logger.error(f"Error reading member data: {e}")
             return f'Fout bij het lezen van leden data: {e}'
