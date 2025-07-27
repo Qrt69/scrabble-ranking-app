@@ -27,55 +27,25 @@ print("=== DEBUG: Starting app initialization ===")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-print("=== DEBUG: Logging configured ===")
-
 # Dropbox configuration
-print("=== DEBUG: About to read DROPBOX_TOKEN from environment ===")
 DROPBOX_ACCESS_TOKEN = os.environ.get("DROPBOX_TOKEN", "")
-print(f"=== DEBUG: DROPBOX_TOKEN from os.environ.get: {'Present' if DROPBOX_ACCESS_TOKEN else 'Missing'} ===")
-print(f"=== DEBUG: Token length: {len(DROPBOX_ACCESS_TOKEN)} ===")
-print(f"=== DEBUG: Token value (first 20 chars): {repr(DROPBOX_ACCESS_TOKEN[:20])} ===")
-print(f"=== DEBUG: Token is empty string: {DROPBOX_ACCESS_TOKEN == ''} ===")
-print(f"=== DEBUG: Token is whitespace only: {DROPBOX_ACCESS_TOKEN.strip() == '' if DROPBOX_ACCESS_TOKEN else 'N/A'} ===")
-
 USE_DROPBOX = bool(DROPBOX_ACCESS_TOKEN)
-print(f"=== DEBUG: USE_DROPBOX calculated: {USE_DROPBOX} ===")
-
-print(f"=== DEBUG: Dropbox configuration ===")
-print(f"=== DEBUG: DROPBOX_TOKEN from env: {'Present' if DROPBOX_ACCESS_TOKEN else 'Missing'} ===")
-print(f"=== DEBUG: Token length: {len(DROPBOX_ACCESS_TOKEN)} ===")
-print(f"=== DEBUG: USE_DROPBOX: {USE_DROPBOX} ===")
 
 if USE_DROPBOX:
-    print("=== DEBUG: Entering USE_DROPBOX=True block ===")
     logger.info("Initializing Dropbox integration...")
-    print("=== DEBUG: Initializing Dropbox integration ===")
     try:
-        print("=== DEBUG: Calling dropbox_integration.initialize_dropbox() ===")
         result = dropbox_integration.initialize_dropbox(DROPBOX_ACCESS_TOKEN)
-        print(f"=== DEBUG: initialize_dropbox() returned: {result} ===")
         
         if result:
             logger.info("Dropbox integration successful")
-            print("=== DEBUG: Dropbox integration successful ===")
         else:
             logger.error("Dropbox integration failed - falling back to local files")
-            print("=== DEBUG: Dropbox integration failed ===")
             USE_DROPBOX = False
-            print(f"=== DEBUG: USE_DROPBOX set to: {USE_DROPBOX} ===")
     except Exception as e:
         logger.error(f"Dropbox initialization error: {e} - falling back to local files")
-        print(f"=== DEBUG: Dropbox initialization exception: {e} ===")
-        import traceback
-        print(f"=== DEBUG: Full traceback: {traceback.format_exc()} ===")
         USE_DROPBOX = False
-        print(f"=== DEBUG: USE_DROPBOX set to: {USE_DROPBOX} ===")
 else:
-    print("=== DEBUG: Entering USE_DROPBOX=False block ===")
     logger.info("No Dropbox access token found - using local files only")
-    print("=== DEBUG: No Dropbox token found ===")
-
-print(f"=== DEBUG: Final USE_DROPBOX value: {USE_DROPBOX} ===")
 
 importlib.reload(tools)
 
@@ -499,11 +469,9 @@ def load_current_data():
         if dropbox_manager:
             synced_files = dropbox_manager.sync_excel_files(required_files)
             logger.info(f"Synced {len(synced_files)} files from Dropbox: {synced_files}")
-            print(f"=== DEBUG: Synced files: {synced_files} ===")
             
             if not synced_files:
                 logger.error("No files synced from Dropbox - app cannot function")
-                print("=== DEBUG: No files synced from Dropbox - app cannot function ===")
                 # Initialize with empty data
                 df_global = pd.DataFrame()
                 df_gen_info = pd.DataFrame()
@@ -513,7 +481,6 @@ def load_current_data():
                 return
         else:
             logger.error("Dropbox manager not available - app cannot function")
-            print("=== DEBUG: Dropbox manager is None - app cannot function ===")
             # Initialize with empty data
             df_global = pd.DataFrame()
             df_gen_info = pd.DataFrame()
@@ -523,7 +490,6 @@ def load_current_data():
             return
     except Exception as e:
         logger.error(f"Dropbox sync error: {e} - app cannot function without data")
-        print(f"=== DEBUG: Dropbox sync exception: {e} - app cannot function ===")
         # Initialize with empty data
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
@@ -534,21 +500,16 @@ def load_current_data():
     
     # Get available seasons
     available_seasons = get_available_seasons()
-    print(f"=== DEBUG: Available seasons: {[s['value'] for s in available_seasons]} ===")
     
     current_filename = get_current_season_filename()
-    print(f"=== DEBUG: Current filename determined: {current_filename} ===")
     
     # Check if current season file exists
     if os.path.exists(current_filename):
         filename = current_filename
-        print(f"=== DEBUG: Using current season file: {filename} ===")
     elif available_seasons:
         filename = available_seasons[0]["value"]
         current_filename = filename
-        print(f"=== DEBUG: Using first available season: {filename} ===")
     else:
-        print("=== DEBUG: No data files found - initializing with empty data ===")
         # No data available
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
@@ -557,34 +518,13 @@ def load_current_data():
         df_pts_final = pd.DataFrame()
         return
     
-    print(f"=== DEBUG: About to load data from: {filename} ===")
     load_data_for_season(filename)
 
-# Debug: Check what files exist
-print("=== DEBUG: Checking files ===")
-print(f"Current directory: {os.getcwd()}")
-files = os.listdir('.')
-excel_files = [f for f in files if f.endswith('.xlsx')]
-print(f"Excel files found: {excel_files}")
-
-for file in excel_files:
-    if os.path.exists(file):
-        print(f"  {file} exists ({os.path.getsize(file)} bytes)")
-        try:
-            xl = pd.ExcelFile(file)
-            print(f"    Sheets: {xl.sheet_names}")
-        except Exception as e:
-            print(f"    Error reading: {e}")
-
 # Load initial data
-print("=== DEBUG: About to call load_current_data() ===")
 try:
     load_current_data()
-    print("=== DEBUG: load_current_data() completed successfully ===")
 except Exception as e:
-    print(f"=== DEBUG: Error in load_current_data(): {e} ===")
-    import traceback
-    print(f"=== DEBUG: Traceback: {traceback.format_exc()} ===")
+    logger.error(f"Error in load_current_data(): {e}")
 
 # Member management functions
 def load_member_data():
