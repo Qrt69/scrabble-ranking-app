@@ -1,3 +1,5 @@
+print("=== DEBUG: Starting to load dash_app.py ===")
+
 import dash
 from dash import dcc, html, dash_table, Input, Output, State, callback, ctx, no_update
 import dash_bootstrap_components as dbc
@@ -15,7 +17,10 @@ import PyPDF2
 import re
 import json
 import logging
+
+print("=== DEBUG: About to import dropbox_integration ===")
 import dropbox_integration
+print("=== DEBUG: dropbox_integration imported successfully ===")
 
 from dash.dash_table.Format import Format, Scheme
 from dash.dependencies import ALL
