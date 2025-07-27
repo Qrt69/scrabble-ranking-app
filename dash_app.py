@@ -150,12 +150,16 @@ def extract_date_from_pdf_content(pdf_content):
         traceback.print_exc()
         return None
 
+# Global variable to track if PDFs have been synced
+_pdfs_synced = False
+
 def get_available_pdf_reports():
     """Scan Wedstrijdverslagen folder and return mapping of dates to PDF files"""
+    global _pdfs_synced
     pdf_mapping = {}
     
-    # Sync PDF files from Dropbox if available
-    if USE_DROPBOX:
+    # Sync PDF files from Dropbox only once during app startup
+    if USE_DROPBOX and not _pdfs_synced:
         logger.info("Syncing PDF files from Dropbox...")
         dropbox_manager = dropbox_integration.get_dropbox_manager()
         if dropbox_manager:
@@ -208,6 +212,10 @@ def get_available_pdf_reports():
                                 logger.error(f"Error copying to assets: {e}")
             except Exception as e:
                 logger.warning(f"Could not list Wedstrijdverslagen subfolder: {e}")
+        
+        # Mark PDFs as synced
+        _pdfs_synced = True
+        logger.info("PDF sync completed")
     
     # Now scan local Wedstrijdverslagen folder
     if not os.path.exists("Wedstrijdverslagen"):
@@ -223,12 +231,23 @@ def get_available_pdf_reports():
                     date_part = filename.split("van ")[1].replace('.pdf', '')
                     # Convert to DD/MM/YYYY format
                     if '-' in date_part:
-                        day, month, year = date_part.split('-')
-                        # Add 20 prefix to year if it's 2 digits
-                        if len(year) == 2:
-                            year = '20' + year
-                        date_str = f"{day.zfill(2)}/{month.zfill(2)}/{year}"
-                        pdf_mapping[date_str] = filename
+                        parts = date_part.split('-')
+                        if len(parts) == 3:
+                            day, month, year = parts
+                            # Handle different year formats
+                            if len(year) == 2:
+                                year = '20' + year
+                            elif len(year) == 4:
+                                year = year
+                            else:
+                                continue  # Skip if year format is unknown
+                            
+                            # Ensure day and month are 2 digits
+                            day = day.zfill(2)
+                            month = month.zfill(2)
+                            
+                            date_str = f"{day}/{month}/{year}"
+                            pdf_mapping[date_str] = filename
             except Exception as e:
                 logger.error(f"Error parsing PDF filename {filename}: {e}")
                 continue
