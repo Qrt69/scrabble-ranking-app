@@ -266,8 +266,10 @@ def load_data_for_season(filename):
     """Load data from a specific season file"""
     global df_global, df_gen_info, df_pct_final, df_rp_final, df_pts_final
     
+    print(f"=== DEBUG: Inside load_data_for_season({filename}) ===")
+    
     if not os.path.exists(filename):
-        logger.warning(f"Season file not found: {filename}")
+        print(f"=== DEBUG: Season file not found: {filename} ===")
         # No data available
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
@@ -277,17 +279,17 @@ def load_data_for_season(filename):
         return
     
     try:
-        logger.info(f"Loading data from {filename}")
+        print(f"=== DEBUG: Loading data from {filename} ===")
         # Try both "Globaal" and "globaal" (case sensitive)
         try:
             df_global = pd.read_excel(filename, sheet_name="Globaal")
-            logger.info(f"Successfully read {filename} with {len(df_global)} rows")
+            print(f"=== DEBUG: Successfully read {filename} with {len(df_global)} rows ===")
         except Exception as e:
-            logger.error(f"Error reading with 'Globaal': {e}")
+            print(f"=== DEBUG: Error reading with 'Globaal': {e} ===")
             df_global = pd.read_excel(filename, sheet_name="globaal")
-            logger.info(f"Successfully read {filename} with 'globaal' sheet: {len(df_global)} rows")
+            print(f"=== DEBUG: Successfully read {filename} with 'globaal' sheet: {len(df_global)} rows ===")
         
-        logger.info(f"Columns in df_global: {list(df_global.columns)}")
+        print(f"=== DEBUG: Columns in df_global: {list(df_global.columns)} ===")
         df_global['Datum_dt'] = pd.to_datetime(df_global['Datum'], dayfirst=True)
         df_global = df_global.sort_values('Datum_dt').copy()
         
@@ -339,27 +341,29 @@ def load_current_data():
     """Load data from the current season file"""
     global df_global, df_gen_info, df_pct_final, df_rp_final, df_pts_final, current_filename, available_seasons
     
+    print("=== DEBUG: Inside load_current_data() ===")
+    
     # Get available seasons
     available_seasons = get_available_seasons()
-    logger.info(f"Available seasons: {[s['value'] for s in available_seasons]}")
+    print(f"=== DEBUG: Available seasons: {[s['value'] for s in available_seasons]} ===")
     
     current_filename = get_current_season_filename()
-    logger.info(f"Current filename determined: {current_filename}")
+    print(f"=== DEBUG: Current filename determined: {current_filename} ===")
     
     # Check if current season file exists, otherwise fall back to first available or Globaal.xlsx
     if os.path.exists(current_filename):
         filename = current_filename
-        logger.info(f"Using current season file: {filename}")
+        print(f"=== DEBUG: Using current season file: {filename} ===")
     elif available_seasons:
         filename = available_seasons[0]["value"]
         current_filename = filename
-        logger.info(f"Using first available season: {filename}")
+        print(f"=== DEBUG: Using first available season: {filename} ===")
     elif os.path.exists("Globaal.xlsx"):
         filename = "Globaal.xlsx"
         current_filename = "Globaal.xlsx"
-        logger.info(f"Using fallback file: {filename}")
+        print(f"=== DEBUG: Using fallback file: {filename} ===")
     else:
-        logger.warning("No data files found - initializing with empty data")
+        print("=== DEBUG: No data files found - initializing with empty data ===")
         # No data available
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
@@ -368,7 +372,7 @@ def load_current_data():
         df_pts_final = pd.DataFrame()
         return
     
-    logger.info(f"About to load data from: {filename}")
+    print(f"=== DEBUG: About to load data from: {filename} ===")
     load_data_for_season(filename)
 
 # Debug: Check what files exist
