@@ -281,8 +281,13 @@ def load_data_for_season(filename):
         # Try both "Globaal" and "globaal" (case sensitive)
         try:
             df_global = pd.read_excel(filename, sheet_name="Globaal")
-        except:
+            logger.info(f"Successfully read {filename} with {len(df_global)} rows")
+        except Exception as e:
+            logger.error(f"Error reading with 'Globaal': {e}")
             df_global = pd.read_excel(filename, sheet_name="globaal")
+            logger.info(f"Successfully read {filename} with 'globaal' sheet: {len(df_global)} rows")
+        
+        logger.info(f"Columns in df_global: {list(df_global.columns)}")
         df_global['Datum_dt'] = pd.to_datetime(df_global['Datum'], dayfirst=True)
         df_global = df_global.sort_values('Datum_dt').copy()
         
