@@ -2459,15 +2459,14 @@ def enable_delete_pdf_button(selected_pdf):
 
 @app.callback(
     [Output("delete-pdf-status", "children"),
-     Output("delete-pdf-dropdown", "value"),
-     Output("delete-pdf-dropdown", "options", allow_duplicate=True)],
+     Output("delete-pdf-dropdown", "value")],
     [Input("delete-pdf-btn", "n_clicks")],
     [State("delete-pdf-dropdown", "value")],
     prevent_initial_call=True
 )
 def delete_pdf(n_clicks, selected_pdf):
     if not selected_pdf:
-        return "Geen PDF geselecteerd", None, []
+        return "Geen PDF geselecteerd", None
     
     try:
         # Get the PDF filename from the selected option
@@ -2507,24 +2506,17 @@ def delete_pdf(n_clicks, selected_pdf):
             except Exception as e:
                 logger.error(f"Dropbox PDF deletion error: {e}")
         
-        # Update dropdown options
-        pdf_mapping = get_available_pdf_reports()
-        options = [
-            {"label": f"{date} - {filename}", "value": filename}
-            for date, filename in pdf_mapping.items()
-        ]
-        
         if deleted_files:
-            return f"✅ PDF '{pdf_filename}' succesvol verwijderd uit: {', '.join(deleted_files)}", None, options
+            return f"✅ PDF '{pdf_filename}' succesvol verwijderd uit: {', '.join(deleted_files)}", None
         else:
-            return f"❌ PDF '{pdf_filename}' kon niet worden verwijderd", None, options
+            return f"❌ PDF '{pdf_filename}' kon niet worden verwijderd", None
             
     except Exception as e:
         logger.error(f"Error deleting PDF: {e}")
-        return f"❌ Fout bij verwijderen van PDF: {e}", None, []
+        return f"❌ Fout bij verwijderen van PDF: {e}", None
 
 @app.callback(
-    Output("delete-pdf-dropdown", "options", allow_duplicate=True),
+    Output("delete-pdf-dropdown", "options"),
     [Input("tabs", "value")],
     prevent_initial_call=False  # Allow initial call
 )
