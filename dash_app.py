@@ -16,6 +16,7 @@ import re
 import json
 import logging
 import dropbox_integration
+import dropbox
 
 from dash.dash_table.Format import Format, Scheme
 from dash.dependencies import ALL
@@ -1035,10 +1036,64 @@ def get_season_filename(date_str):
             end_year = year
         return f'Globaal {start_year}-{end_year}.xlsx'
 
+# Create Dash app
 app = dash.Dash(__name__, external_stylesheets=[
     dbc.themes.BOOTSTRAP,
     "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
 ], suppress_callback_exceptions=True, assets_folder='assets')
+
+# Add a simple test endpoint
+@app.server.route('/test-dropbox')
+def test_dropbox():
+    """Test Dropbox connection directly"""
+    import dropbox
+    
+    token = os.environ.get("DROPBOX_TOKEN", "")
+    
+    result = f"""
+    <h1>Dropbox Token Test</h1>
+    <p><strong>Token present:</strong> {'Yes' if token else 'No'}</p>
+    <p><strong>Token length:</strong> {len(token)}</p>
+    <p><strong>Token starts with:</strong> {token[:10] if token else 'N/A'}...</p>
+    <p><strong>Token is empty:</strong> {token == ''}</p>
+    <p><strong>Token is whitespace only:</strong> {token.strip() == '' if token else 'N/A'}</p>
+    <p><strong>Token format correct:</strong> {token.startswith('sl.') if token else 'N/A'}</p>
+    """
+    
+    if token and token.startswith('sl.'):
+        try:
+            dbx = dropbox.Dropbox(token)
+            account = dbx.users_get_current_account()
+            result += f"<p><strong>✅ Connection successful:</strong> {account.name.display_name} ({account.email})</p>"
+            
+            # Test listing files
+            files = dbx.files_list_folder("")
+            result += f"<p><strong>✅ Can list files:</strong> {len(files.entries)} items found</p>"
+            
+            # Look for Scrabble App folder
+            app_folder = None
+            for entry in files.entries:
+                if hasattr(entry, 'name') and entry.name == "Scrabble App":
+                    app_folder = entry
+                    break
+            
+            if app_folder:
+                app_files = dbx.files_list_folder("/Scrabble App")
+                result += f"<p><strong>✅ Scrabble App folder found:</strong> {len(app_files.entries)} files</p>"
+                for entry in app_files.entries:
+                    if hasattr(entry, 'size'):
+                        result += f"<p>   - {entry.name} ({entry.size} bytes)</p>"
+            else:
+                result += "<p><strong>❌ Scrabble App folder not found</strong></p>"
+                result += "<p>Available folders:</p>"
+                for entry in files.entries:
+                    if not hasattr(entry, 'size'):
+                        result += f"<p>   - {entry.name}</p>"
+                        
+        except Exception as e:
+            result += f"<p><strong>❌ Connection failed:</strong> {e}</p>"
+    
+    return result
 
 # Add print styles
 app.index_string = '''
