@@ -1,5 +1,3 @@
-print("=== DEBUG: Starting to load dash_app.py ===")
-
 import dash
 from dash import dcc, html, dash_table, Input, Output, State, callback, ctx, no_update
 import dash_bootstrap_components as dbc
@@ -17,10 +15,7 @@ import PyPDF2
 import re
 import json
 import logging
-
-print("=== DEBUG: About to import dropbox_integration ===")
 import dropbox_integration
-print("=== DEBUG: dropbox_integration imported successfully ===")
 
 from dash.dash_table.Format import Format, Scheme
 from dash.dependencies import ALL
@@ -33,22 +28,15 @@ logger = logging.getLogger(__name__)
 DROPBOX_ACCESS_TOKEN = os.environ.get("DROPBOX_TOKEN", "")
 USE_DROPBOX = bool(DROPBOX_ACCESS_TOKEN)
 
-print(f"=== DEBUG: DROPBOX_TOKEN found: {bool(DROPBOX_ACCESS_TOKEN)} ===")
-print(f"=== DEBUG: USE_DROPBOX: {USE_DROPBOX} ===")
-
 if USE_DROPBOX:
     logger.info("Initializing Dropbox integration...")
-    print("=== DEBUG: About to initialize Dropbox ===")
     if dropbox_integration.initialize_dropbox(DROPBOX_ACCESS_TOKEN):
         logger.info("Dropbox integration successful")
-        print("=== DEBUG: Dropbox initialization successful ===")
     else:
         logger.error("Dropbox integration failed - falling back to local files")
-        print("=== DEBUG: Dropbox initialization failed ===")
         USE_DROPBOX = False
 else:
     logger.info("No Dropbox access token found - using local files only")
-    print("=== DEBUG: No Dropbox token found ===")
 
 importlib.reload(tools)
 
@@ -445,7 +433,7 @@ def load_current_data():
     
     print("=== DEBUG: Inside load_current_data() ===")
     
-        # Sync with Dropbox if available
+    # Sync with Dropbox if available
     if USE_DROPBOX:
         logger.info("Syncing Excel files from Dropbox...")
         required_files = ["Globaal 2024-2025.xlsx", "Zomer 2025.xlsx", "Info.xlsx"]
@@ -453,17 +441,6 @@ def load_current_data():
         if dropbox_manager:
             synced_files = dropbox_manager.sync_excel_files(required_files)
             logger.info(f"Synced {len(synced_files)} files from Dropbox: {synced_files}")
-            
-            # Debug: Check file sizes after sync
-            for filename in required_files:
-                if os.path.exists(filename):
-                    size = os.path.getsize(filename)
-                    logger.info(f"After sync - {filename}: {size} bytes")
-                    try:
-                        df = pd.read_excel(filename, sheet_name="Globaal")
-                        logger.info(f"After sync - {filename}: {len(df)} rows loaded")
-                    except Exception as e:
-                        logger.error(f"Error reading {filename} after sync: {e}")
     
     # Get available seasons
     available_seasons = get_available_seasons()
