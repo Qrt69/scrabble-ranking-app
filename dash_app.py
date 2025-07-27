@@ -20,13 +20,22 @@ import dropbox_integration
 from dash.dash_table.Format import Format, Scheme
 from dash.dependencies import ALL
 
-# Set up logging for production debugging
+print("=== DEBUG: Starting app initialization ===")
+
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+print("=== DEBUG: Logging configured ===")
+
 # Dropbox configuration
+print("=== DEBUG: About to read DROPBOX_TOKEN from environment ===")
 DROPBOX_ACCESS_TOKEN = os.environ.get("DROPBOX_TOKEN", "")
+print(f"=== DEBUG: DROPBOX_TOKEN from os.environ.get: {'Present' if DROPBOX_ACCESS_TOKEN else 'Missing'} ===")
+print(f"=== DEBUG: Token length: {len(DROPBOX_ACCESS_TOKEN)} ===")
+
 USE_DROPBOX = bool(DROPBOX_ACCESS_TOKEN)
+print(f"=== DEBUG: USE_DROPBOX calculated: {USE_DROPBOX} ===")
 
 print(f"=== DEBUG: Dropbox configuration ===")
 print(f"=== DEBUG: DROPBOX_TOKEN from env: {'Present' if DROPBOX_ACCESS_TOKEN else 'Missing'} ===")
@@ -34,6 +43,7 @@ print(f"=== DEBUG: Token length: {len(DROPBOX_ACCESS_TOKEN)} ===")
 print(f"=== DEBUG: USE_DROPBOX: {USE_DROPBOX} ===")
 
 if USE_DROPBOX:
+    print("=== DEBUG: Entering USE_DROPBOX=True block ===")
     logger.info("Initializing Dropbox integration...")
     print("=== DEBUG: Initializing Dropbox integration ===")
     try:
@@ -48,15 +58,20 @@ if USE_DROPBOX:
             logger.error("Dropbox integration failed - falling back to local files")
             print("=== DEBUG: Dropbox integration failed ===")
             USE_DROPBOX = False
+            print(f"=== DEBUG: USE_DROPBOX set to: {USE_DROPBOX} ===")
     except Exception as e:
         logger.error(f"Dropbox initialization error: {e} - falling back to local files")
         print(f"=== DEBUG: Dropbox initialization exception: {e} ===")
         import traceback
         print(f"=== DEBUG: Full traceback: {traceback.format_exc()} ===")
         USE_DROPBOX = False
+        print(f"=== DEBUG: USE_DROPBOX set to: {USE_DROPBOX} ===")
 else:
+    print("=== DEBUG: Entering USE_DROPBOX=False block ===")
     logger.info("No Dropbox access token found - using local files only")
     print("=== DEBUG: No Dropbox token found ===")
+
+print(f"=== DEBUG: Final USE_DROPBOX value: {USE_DROPBOX} ===")
 
 importlib.reload(tools)
 
