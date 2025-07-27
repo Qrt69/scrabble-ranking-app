@@ -66,6 +66,16 @@ class DropboxManager:
             logger.error(f"Error uploading {local_path}: {e}")
             return False
     
+    def delete_file(self, dropbox_path):
+        """Delete a file from Dropbox"""
+        try:
+            self.dbx.files_delete_v2(dropbox_path)
+            logger.info(f"Deleted {dropbox_path} from Dropbox")
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting {dropbox_path}: {e}")
+            return False
+    
     def file_exists(self, dropbox_path):
         """Check if a file exists in Dropbox"""
         try:
