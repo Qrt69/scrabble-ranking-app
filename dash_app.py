@@ -14,9 +14,14 @@ import hashlib
 import PyPDF2
 import re
 import json
+import logging
 
 from dash.dash_table.Format import Format, Scheme
 from dash.dependencies import ALL
+
+# Set up logging for production debugging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 importlib.reload(tools)
 
@@ -43,9 +48,9 @@ def sync_pdf_files():
         # Only copy if target doesn't exist or source is newer
         if not os.path.exists(target_file) or os.path.getmtime(source_file) > os.path.getmtime(target_file):
             shutil.copy2(source_file, target_file)
-            print(f"Synced: {filename}")
+            logger.info(f"Synced: {filename}")
     
-    print(f"PDF sync complete. {len(source_files)} files processed.")
+    logger.info(f"PDF sync complete. {len(source_files)} files processed.")
 
 # Sync PDF files on startup
 sync_pdf_files()
@@ -125,7 +130,7 @@ def extract_date_from_pdf_content(pdf_content):
         return None
         
     except Exception as e:
-        print(f"Error extracting date from PDF: {e}")
+        logger.error(f"Error extracting date from PDF: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -135,6 +140,7 @@ def get_available_pdf_reports():
     pdf_mapping = {}
     
     if not os.path.exists("Wedstrijdverslagen"):
+        logger.warning("Wedstrijdverslagen folder not found")
         return pdf_mapping
     
     for filename in os.listdir("Wedstrijdverslagen"):
@@ -153,6 +159,7 @@ def get_available_pdf_reports():
                         date_str = f"{day.zfill(2)}/{month.zfill(2)}/{year}"
                         pdf_mapping[date_str] = filename
             except Exception as e:
+                logger.error(f"Error parsing PDF filename {filename}: {e}")
                 continue
     
     return pdf_mapping
@@ -260,6 +267,7 @@ def load_data_for_season(filename):
     global df_global, df_gen_info, df_pct_final, df_rp_final, df_pts_final
     
     if not os.path.exists(filename):
+        logger.warning(f"Season file not found: {filename}")
         # No data available
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
@@ -269,7 +277,12 @@ def load_data_for_season(filename):
         return
     
     try:
-        df_global = pd.read_excel(filename, sheet_name="Globaal")
+        logger.info(f"Loading data from {filename}")
+        # Try both "Globaal" and "globaal" (case sensitive)
+        try:
+            df_global = pd.read_excel(filename, sheet_name="Globaal")
+        except:
+            df_global = pd.read_excel(filename, sheet_name="globaal")
         df_global['Datum_dt'] = pd.to_datetime(df_global['Datum'], dayfirst=True)
         df_global = df_global.sort_values('Datum_dt').copy()
         
@@ -304,8 +317,12 @@ def load_data_for_season(filename):
         columns_rankingpts = ['Naam', 'Klasse', 'Tot. punten']
         df_pts_final = tools.process_final_df(df_gen_info, df_rankingpts, columns_rankingpts, 'Tot. punten')
         
+        logger.info(f"Successfully loaded data: {len(df_global)} rows")
+        
     except Exception as e:
-        print(f"Error loading data from {filename}: {e}")
+        logger.error(f"Error loading data from {filename}: {e}")
+        import traceback
+        traceback.print_exc()
         # Initialize empty dataframes
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
@@ -319,6 +336,7 @@ def load_current_data():
     
     # Get available seasons
     available_seasons = get_available_seasons()
+    logger.info(f"Available seasons: {[s['value'] for s in available_seasons]}")
     
     current_filename = get_current_season_filename()
     
@@ -332,6 +350,7 @@ def load_current_data():
         filename = "Globaal.xlsx"
         current_filename = "Globaal.xlsx"
     else:
+        logger.warning("No data files found - initializing with empty data")
         # No data available
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
@@ -341,6 +360,22 @@ def load_current_data():
         return
     
     load_data_for_season(filename)
+
+# Debug: Check what files exist
+print("=== DEBUG: Checking files ===")
+print(f"Current directory: {os.getcwd()}")
+files = os.listdir('.')
+excel_files = [f for f in files if f.endswith('.xlsx')]
+print(f"Excel files found: {excel_files}")
+
+for file in excel_files:
+    if os.path.exists(file):
+        print(f"  {file} exists ({os.path.getsize(file)} bytes)")
+        try:
+            xl = pd.ExcelFile(file)
+            print(f"    Sheets: {xl.sheet_names}")
+        except Exception as e:
+            print(f"    Error reading: {e}")
 
 # Load initial data
 load_current_data()
@@ -354,9 +389,10 @@ def load_member_data():
         try:
             with open(json_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+            logger.info(f"Loaded {len(data)} members from JSON")
             return pd.DataFrame(data)
         except Exception as e:
-            print(f"Error loading members.json: {e}")
+            logger.error(f"Error loading members.json: {e}")
     
     # If JSON doesn't exist, create from Excel file
     if os.path.exists("Info.xlsx"):
@@ -366,11 +402,13 @@ def load_member_data():
             
             # Save to JSON for future use
             save_member_data(df_leden)
+            logger.info(f"Created members.json from Excel with {len(df_leden)} members")
             return df_leden
         except Exception as e:
-            print(f"Error loading from Info.xlsx: {e}")
+            logger.error(f"Error loading from Info.xlsx: {e}")
     
     # Return empty DataFrame if no data available
+    logger.warning("No member data found - creating empty DataFrame")
     return pd.DataFrame(columns=['Naam', 'CLUB', 'KLASSE'])
 
 def save_member_data(df):
@@ -378,18 +416,19 @@ def save_member_data(df):
     try:
         with open("members.json", 'w', encoding='utf-8') as f:
             json.dump(df.to_dict('records'), f, ensure_ascii=False, indent=2)
+        logger.info(f"Saved {len(df)} members to JSON")
         return True
     except Exception as e:
-        print(f"Error saving members.json: {e}")
+        logger.error(f"Error saving members.json: {e}")
         return False
 
 # Load member data
 df_leden = load_member_data()
-print(f"Loaded {len(df_leden)} members from data source")
+logger.info(f"Loaded {len(df_leden)} members from data source")
 if not df_leden.empty:
-    print(f"Sample members: {df_leden.head(3).to_dict('records')}")
+    logger.info(f"Sample members: {df_leden.head(3).to_dict('records')}")
 else:
-    print("No member data found - creating sample data for testing")
+    logger.info("No member data found - creating sample data for testing")
     # Create some sample data for testing
     sample_members = [
         {'Naam': 'Jan Janssens', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
@@ -398,7 +437,7 @@ else:
     ]
     df_leden = pd.DataFrame(sample_members)
     save_member_data(df_leden)
-    print(f"Created sample data with {len(df_leden)} members")
+    logger.info(f"Created sample data with {len(df_leden)} members")
 
 def make_table(df, table_id, title, klasse_filter_id=None):
     if df.empty:
@@ -1379,78 +1418,102 @@ def process_upload(date, contents, filename):
     if not date or not contents:
         return ''
     
-    # Convert date from ISO to DD/MM/YYYY
-    dt = datetime.strptime(date[:10], '%Y-%m-%d')
-    date_str = dt.strftime('%d/%m/%Y')
-    
-    # Read uploaded CSV
-    content_type, content_string = contents.split(',')
-    decoded = base64.b64decode(content_string)
     try:
+        # Convert date from ISO to DD/MM/YYYY
+        dt = datetime.strptime(date[:10], '%Y-%m-%d')
+        date_str = dt.strftime('%d/%m/%Y')
+        logger.info(f"Processing upload for date: {date_str}")
+        
+        # Read uploaded CSV
+        content_type, content_string = contents.split(',')
+        decoded = base64.b64decode(content_string)
         try:
-            df = pd.read_csv(io.StringIO(decoded.decode('utf-8')), sep=';')
-        except Exception:
-            df = pd.read_csv(io.StringIO(decoded.decode('utf-8')), sep=',')
-    except Exception as e:
-        return f'Fout bij het lezen van het CSV-bestand: {e}'
-    
-    # Read supporting Excel file for leden
-    try:
-        df_leden = pd.read_excel('Info.xlsx', sheet_name='Leden')
-        df_leden.rename(columns={'NAAM': 'Naam'}, inplace=True)
-    except Exception as e:
-        return f'Fout bij het lezen van Info.xlsx: {e}'
-    
-    # Always determine the season filename based on the uploaded date
-    season_filename = get_season_filename(date_str)
-    
-    # Check for duplicates and assign volgnummer
-    if os.path.exists(season_filename):
-        try:
-            df_season = pd.read_excel(season_filename, sheet_name='Globaal')
+            try:
+                df = pd.read_csv(io.StringIO(decoded.decode('utf-8')), sep=';')
+            except Exception:
+                df = pd.read_csv(io.StringIO(decoded.decode('utf-8')), sep=',')
         except Exception as e:
-            return f'Fout bij het lezen van {season_filename}: {e}'
-        # Check if this date already exists
-        if (df_season['Datum'] == date_str).any():
-            return f'Deze uitslag voor {date_str} werd al ingelezen in {season_filename}.'
-        # Assign volgnummer as one more than the number of unique dates (sorted chronologically)
-        unique_dates = sorted(pd.to_datetime(df_season['Datum'], dayfirst=True).unique())
-        volgnummer = len(unique_dates) + 1
-    else:
-        df_season = None
-        volgnummer = 1
-    
-    # Prepare row_wedstrijdinfo
-    row_wedstrijdinfo = {'Datum': date_str, 'Beurten': len([col for col in df.columns if col.startswith('B') and col[1:].isdigit()])}
-    
-    # Process the data
-    try:
-        df_processed = tools.process_uitgebreid(df, row_wedstrijdinfo, df_leden, volgnummer)
+            logger.error(f"CSV read error: {e}")
+            return f'Fout bij het lezen van het CSV-bestand: {e}'
+        
+        # Read supporting Excel file for leden
+        try:
+            if os.path.exists('Info.xlsx'):
+                df_leden = pd.read_excel('Info.xlsx', sheet_name='Leden')
+                df_leden.rename(columns={'NAAM': 'Naam'}, inplace=True)
+            else:
+                # Use global member data if Info.xlsx doesn't exist
+                logger.warning("Info.xlsx not found, using global member data")
+                # Import the global df_leden properly
+                global df_leden
+        except Exception as e:
+            logger.error(f"Error reading member data: {e}")
+            return f'Fout bij het lezen van leden data: {e}'
+        
+        # Always determine the season filename based on the uploaded date
+        season_filename = get_season_filename(date_str)
+        logger.info(f"Season filename: {season_filename}")
+        
+        # Check for duplicates and assign volgnummer
+        if os.path.exists(season_filename):
+            try:
+                df_season = pd.read_excel(season_filename, sheet_name='Globaal')
+                logger.info(f"Loaded existing season file with {len(df_season)} rows")
+            except Exception as e:
+                logger.error(f"Error reading season file: {e}")
+                return f'Fout bij het lezen van {season_filename}: {e}'
+            # Check if this date already exists
+            if (df_season['Datum'] == date_str).any():
+                return f'Deze uitslag voor {date_str} werd al ingelezen in {season_filename}.'
+            # Assign volgnummer as one more than the number of unique dates (sorted chronologically)
+            unique_dates = sorted(pd.to_datetime(df_season['Datum'], dayfirst=True).unique())
+            volgnummer = len(unique_dates) + 1
+        else:
+            df_season = None
+            volgnummer = 1
+            logger.info(f"Creating new season file: {season_filename}")
+        
+        # Prepare row_wedstrijdinfo
+        row_wedstrijdinfo = {'Datum': date_str, 'Beurten': len([col for col in df.columns if col.startswith('B') and col[1:].isdigit()])}
+        
+        # Process the data
+        try:
+            df_processed = tools.process_uitgebreid(df, row_wedstrijdinfo, df_leden, volgnummer)
+            logger.info(f"Processed data with {len(df_processed)} rows")
+        except Exception as e:
+            logger.error(f"Data processing error: {e}")
+            return f'Fout bij verwerken van de uitslag: {e}'
+        
+        # Append and save
+        if df_season is not None:
+            df_new = pd.concat([df_season, df_processed.reset_index()], ignore_index=True)
+        else:
+            df_new = df_processed.reset_index()
+        
+        # Apply smart numbering to the new dataset
+        df_new['Datum_dt'] = pd.to_datetime(df_new['Datum'], dayfirst=True)
+        df_new = assign_smart_game_numbers(df_new)
+        
+        try:
+            df_new.to_excel(season_filename, sheet_name='Globaal', index=False)
+            logger.info(f"Successfully saved {len(df_new)} rows to {season_filename}")
+        except Exception as e:
+            logger.error(f"Error saving file: {e}")
+            return f'Fout bij het opslaan van {season_filename}: {e}'
+        
+        # Reload data
+        load_current_data()
+        
+        # Get the actual game number that was assigned
+        actual_game_nr = df_new[df_new['Datum'] == date_str]['GameNr'].iloc[0]
+        
+        return f'Uitslag voor {date_str} (wedstrijd {actual_game_nr}) succesvol toegevoegd aan {season_filename}!'
+        
     except Exception as e:
-        return f'Fout bij verwerken van de uitslag: {e}'
-    
-    # Append and save
-    if df_season is not None:
-        df_new = pd.concat([df_season, df_processed.reset_index()], ignore_index=True)
-    else:
-        df_new = df_processed.reset_index()
-    
-    # Apply smart numbering to the new dataset
-    df_new['Datum_dt'] = pd.to_datetime(df_new['Datum'], dayfirst=True)
-    df_new = assign_smart_game_numbers(df_new)
-    
-    try:
-        df_new.to_excel(season_filename, sheet_name='Globaal', index=False)
-    except Exception as e:
-        return f'Fout bij het opslaan van {season_filename}: {e}'
-    
-    # Reload data
-    load_current_data()
-    
-    # Get the actual game number that was assigned
-    actual_game_nr = df_new[df_new['Datum'] == date_str]['GameNr'].iloc[0]
-    
-    return f'Uitslag voor {date_str} (wedstrijd {actual_game_nr}) succesvol toegevoegd aan {season_filename}!'
+        logger.error(f"Unexpected error in upload processing: {e}")
+        import traceback
+        traceback.print_exc()
+        return f'Onverwachte fout bij upload: {e}'
 
 # PDF Upload Callbacks
 @app.callback(
@@ -1492,96 +1555,107 @@ def handle_pdf_upload(contents, filename):
     prevent_initial_call=True
 )
 def process_pdf_upload(n_clicks, contents, filename):
-    print(f"PDF upload callback triggered - n_clicks: {n_clicks}, filename: {filename}")
+    logger.info(f"PDF upload callback triggered - n_clicks: {n_clicks}, filename: {filename}")
     
     # Prevent processing if no clicks or contents
     if not n_clicks:
-        print("No clicks, returning empty")
+        logger.info("No clicks, returning empty")
         return ''
     
     if not contents:
-        print("No contents, returning empty")
+        logger.info("No contents, returning empty")
         return ''
     
     # Prevent multiple processing
     if n_clicks == 0:
-        print("Zero clicks, returning empty")
+        logger.info("Zero clicks, returning empty")
         return ''
     
-    # Try to extract date from PDF content first
-    print("Extracting date from PDF content...")
-    date_str = extract_date_from_pdf_content(contents)
-    print(f"Extracted date: {date_str}")
-    
-    # If automatic extraction failed, we need to handle this differently
-    # For now, we'll require automatic extraction to work
-    if not date_str:
-        print("Date extraction failed")
-        return 'Fout: Kon datum niet automatisch detecteren uit het PDF-bestand. Zorg ervoor dat het PDF-bestand de juiste datum bevat.'
-    
-    # Check if PDF already exists for this date
-    pdf_mapping = get_available_pdf_reports()
-    if date_str in pdf_mapping:
-        return f'⚠️ Er bestaat al een PDF-verslag voor {date_str}. Upload geannuleerd.'
-    
-    # Generate filename based on date (matching existing pattern)
-    dt_obj = datetime.strptime(date_str, '%d/%m/%Y')
-    if dt_obj.month in [7, 8]:
-        # Summer competition - use DD-M-YY format like existing files
-        filename_new = f"zomerwedstrijd van {dt_obj.day}-{dt_obj.month}-{str(dt_obj.year)[2:]}.pdf"
-    else:
-        # Regular season - use DD-M-YYYY format like existing files
-        filename_new = f"wedstrijd van {dt_obj.day}-{dt_obj.month}-{dt_obj.year}.pdf"
-    
-    # Save PDF to assets folder
     try:
-        # Decode base64 content
-        content_type, content_string = contents.split(',')
-        decoded = base64.b64decode(content_string)
+        # Try to extract date from PDF content first
+        logger.info("Extracting date from PDF content...")
+        date_str = extract_date_from_pdf_content(contents)
+        logger.info(f"Extracted date: {date_str}")
         
-        # Ensure assets directory exists
-        assets_dir = "assets/Wedstrijdverslagen"
-        if not os.path.exists(assets_dir):
-            os.makedirs(assets_dir)
+        # If automatic extraction failed, we need to handle this differently
+        # For now, we'll require automatic extraction to work
+        if not date_str:
+            logger.error("Date extraction failed")
+            return 'Fout: Kon datum niet automatisch detecteren uit het PDF-bestand. Zorg ervoor dat het PDF-bestand de juiste datum bevat.'
         
-        # Save file
-        pdf_path = os.path.join(assets_dir, filename_new)
-        print(f"Saving to assets: {pdf_path}")
-        with open(pdf_path, 'wb') as f:
-            f.write(decoded)
+        # Check if PDF already exists for this date
+        pdf_mapping = get_available_pdf_reports()
+        if date_str in pdf_mapping:
+            return f'⚠️ Er bestaat al een PDF-verslag voor {date_str}. Upload geannuleerd.'
         
-        # Also save to main Wedstrijdverslagen folder for consistency
-        main_dir = "Wedstrijdverslagen"
-        if not os.path.exists(main_dir):
-            os.makedirs(main_dir)
+        # Generate filename based on date (matching existing pattern)
+        dt_obj = datetime.strptime(date_str, '%d/%m/%Y')
+        if dt_obj.month in [7, 8]:
+            # Summer competition - use DD-M-YY format like existing files
+            filename_new = f"zomerwedstrijd van {dt_obj.day}-{dt_obj.month}-{str(dt_obj.year)[2:]}.pdf"
+        else:
+            # Regular season - use DD-M-YYYY format like existing files
+            filename_new = f"wedstrijd van {dt_obj.day}-{dt_obj.month}-{dt_obj.year}.pdf"
         
-        main_pdf_path = os.path.join(main_dir, filename_new)
-        print(f"Saving to main: {main_pdf_path}")
-        with open(main_pdf_path, 'wb') as f:
-            f.write(decoded)
-        
-        # Verify files were saved correctly
-        if not os.path.exists(pdf_path):
-            return f'❌ Fout: PDF kon niet worden opgeslagen in assets folder'
-        if not os.path.exists(main_pdf_path):
-            return f'❌ Fout: PDF kon niet worden opgeslagen in hoofdmap'
-        
-        # Note: PDF mapping will be refreshed on next app load
-        print("PDF files saved successfully")
-        
-        print(f"PDF upload successful: {date_str} -> {filename_new}")
-        
-        # Add a small delay to prevent callback conflicts
-        import time
-        time.sleep(0.1)
-        
-        return f'✅ PDF-verslag voor {date_str} succesvol geüpload!'
-        
+        # Save PDF to assets folder
+        try:
+            # Decode base64 content
+            content_type, content_string = contents.split(',')
+            decoded = base64.b64decode(content_string)
+            
+            # Ensure assets directory exists
+            assets_dir = "assets/Wedstrijdverslagen"
+            if not os.path.exists(assets_dir):
+                os.makedirs(assets_dir)
+                logger.info(f"Created assets directory: {assets_dir}")
+            
+            # Save file
+            pdf_path = os.path.join(assets_dir, filename_new)
+            logger.info(f"Saving to assets: {pdf_path}")
+            with open(pdf_path, 'wb') as f:
+                f.write(decoded)
+            
+            # Also save to main Wedstrijdverslagen folder for consistency
+            main_dir = "Wedstrijdverslagen"
+            if not os.path.exists(main_dir):
+                os.makedirs(main_dir)
+                logger.info(f"Created main directory: {main_dir}")
+            
+            main_pdf_path = os.path.join(main_dir, filename_new)
+            logger.info(f"Saving to main: {main_pdf_path}")
+            with open(main_pdf_path, 'wb') as f:
+                f.write(decoded)
+            
+            # Verify files were saved correctly
+            if not os.path.exists(pdf_path):
+                logger.error(f"PDF not found in assets after save: {pdf_path}")
+                return f'❌ Fout: PDF kon niet worden opgeslagen in assets folder'
+            if not os.path.exists(main_pdf_path):
+                logger.error(f"PDF not found in main after save: {main_pdf_path}")
+                return f'❌ Fout: PDF kon niet worden opgeslagen in hoofdmap'
+            
+            # Note: PDF mapping will be refreshed on next app load
+            logger.info("PDF files saved successfully")
+            
+            logger.info(f"PDF upload successful: {date_str} -> {filename_new}")
+            
+            # Add a small delay to prevent callback conflicts
+            import time
+            time.sleep(0.1)
+            
+            return f'✅ PDF-verslag voor {date_str} succesvol geüpload!'
+            
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            logger.error(f"PDF upload error: {error_details}")
+            return f'❌ Fout bij uploaden van PDF: {e}'
+            
     except Exception as e:
+        logger.error(f"Unexpected error in PDF upload: {e}")
         import traceback
-        error_details = traceback.format_exc()
-        print(f"PDF upload error: {error_details}")
-        return f'❌ Fout bij uploaden van PDF: {e}'
+        traceback.print_exc()
+        return f'Onverwachte fout bij PDF upload: {e}'
 
 @app.callback(
     Output('delete-game-btn', 'disabled'),
