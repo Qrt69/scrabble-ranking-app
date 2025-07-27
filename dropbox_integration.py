@@ -29,12 +29,14 @@ class DropboxManager:
             result = self.dbx.files_list_folder(self.app_folder)
             files = []
             for entry in result.entries:
-                files.append({
-                    'name': entry.name,
-                    'path': entry.path_display,
-                    'size': entry.size,
-                    'modified': entry.server_modified
-                })
+                # Only process files, not folders
+                if hasattr(entry, 'size'):
+                    files.append({
+                        'name': entry.name,
+                        'path': entry.path_display,
+                        'size': entry.size,
+                        'modified': entry.server_modified
+                    })
             logger.info(f"Found {len(files)} files in Dropbox")
             return files
         except Exception as e:

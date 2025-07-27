@@ -185,6 +185,29 @@ def get_available_pdf_reports():
                             logger.info(f"Copied to assets: {file_info['name']}")
                         except Exception as e:
                             logger.error(f"Error copying to assets: {e}")
+            
+            # Also check for PDFs in subfolders (Wedstrijdverslagen folder)
+            try:
+                subfolder_result = dropbox_manager.dbx.files_list_folder(f"{dropbox_manager.app_folder}/Wedstrijdverslagen")
+                for entry in subfolder_result.entries:
+                    if hasattr(entry, 'size') and entry.name.endswith('.pdf'):
+                        dropbox_path = entry.path_display
+                        local_path = f"Wedstrijdverslagen/{entry.name}"
+                        assets_path = f"assets/Wedstrijdverslagen/{entry.name}"
+                        
+                        # Download to main folder
+                        if dropbox_manager.download_file(dropbox_path, local_path):
+                            logger.info(f"Downloaded PDF from subfolder: {entry.name}")
+                            
+                            # Also copy to assets folder for web serving
+                            import shutil
+                            try:
+                                shutil.copy2(local_path, assets_path)
+                                logger.info(f"Copied to assets: {entry.name}")
+                            except Exception as e:
+                                logger.error(f"Error copying to assets: {e}")
+            except Exception as e:
+                logger.warning(f"Could not list Wedstrijdverslagen subfolder: {e}")
     
     # Now scan local Wedstrijdverslagen folder
     if not os.path.exists("Wedstrijdverslagen"):
