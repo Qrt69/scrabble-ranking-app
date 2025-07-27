@@ -15,6 +15,7 @@ import PyPDF2
 import re
 import json
 import logging
+import dropbox_integration
 
 from dash.dash_table.Format import Format, Scheme
 from dash.dependencies import ALL
@@ -22,6 +23,20 @@ from dash.dependencies import ALL
 # Set up logging for production debugging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Dropbox configuration
+DROPBOX_ACCESS_TOKEN = os.environ.get("DROPBOX_ACCESS_TOKEN", "")
+USE_DROPBOX = bool(DROPBOX_ACCESS_TOKEN)
+
+if USE_DROPBOX:
+    logger.info("Initializing Dropbox integration...")
+    if dropbox_integration.initialize_dropbox(DROPBOX_ACCESS_TOKEN):
+        logger.info("Dropbox integration successful")
+    else:
+        logger.error("Dropbox integration failed - falling back to local files")
+        USE_DROPBOX = False
+else:
+    logger.info("No Dropbox access token found - using local files only")
 
 importlib.reload(tools)
 
@@ -342,6 +357,15 @@ def load_current_data():
     global df_global, df_gen_info, df_pct_final, df_rp_final, df_pts_final, current_filename, available_seasons
     
     print("=== DEBUG: Inside load_current_data() ===")
+    
+    # Sync with Dropbox if available
+    if USE_DROPBOX:
+        logger.info("Syncing Excel files from Dropbox...")
+        required_files = ["Globaal 2024-2025.xlsx", "Zomer 2025.xlsx", "Info.xlsx"]
+        dropbox_manager = dropbox_integration.get_dropbox_manager()
+        if dropbox_manager:
+            synced_files = dropbox_manager.sync_excel_files(required_files)
+            logger.info(f"Synced {len(synced_files)} files from Dropbox: {synced_files}")
     
     # Get available seasons
     available_seasons = get_available_seasons()
@@ -1518,6 +1542,16 @@ def process_upload(date, contents, filename):
         try:
             df_new.to_excel(season_filename, sheet_name='Globaal', index=False)
             logger.info(f"Successfully saved {len(df_new)} rows to {season_filename}")
+            
+            # Backup to Dropbox if available
+            if USE_DROPBOX:
+                dropbox_manager = dropbox_integration.get_dropbox_manager()
+                if dropbox_manager:
+                    if dropbox_manager.backup_excel_file(season_filename):
+                        logger.info(f"Successfully backed up {season_filename} to Dropbox")
+                    else:
+                        logger.warning(f"Failed to backup {season_filename} to Dropbox")
+                        
         except Exception as e:
             logger.error(f"Error saving file: {e}")
             return f'Fout bij het opslaan van {season_filename}: {e}'
@@ -1646,6 +1680,15 @@ def process_pdf_upload(n_clicks, contents, filename):
             logger.info(f"Saving to main: {main_pdf_path}")
             with open(main_pdf_path, 'wb') as f:
                 f.write(decoded)
+            
+            # Upload to Dropbox if available
+            if USE_DROPBOX:
+                dropbox_manager = dropbox_integration.get_dropbox_manager()
+                if dropbox_manager:
+                    if dropbox_manager.upload_pdf_report(main_pdf_path, date_str):
+                        logger.info(f"Successfully uploaded PDF to Dropbox")
+                    else:
+                        logger.warning(f"Failed to upload PDF to Dropbox")
             
             # Verify files were saved correctly
             if not os.path.exists(pdf_path):
