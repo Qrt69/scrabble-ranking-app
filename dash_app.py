@@ -2526,16 +2526,24 @@ def delete_pdf(n_clicks, selected_pdf):
 @app.callback(
     Output("delete-pdf-dropdown", "options", allow_duplicate=True),
     [Input("tabs", "value")],
-    prevent_initial_call=True
+    prevent_initial_call=False  # Allow initial call
 )
 def update_delete_pdf_dropdown_options(tab_value):
     # Update PDF dropdown options for management tab
     if tab_value == "management":
+        # Force refresh of PDF list
+        global _pdfs_synced
+        _pdfs_synced = False  # Reset to force sync
+        
         pdf_mapping = get_available_pdf_reports()
+        logger.info(f"PDF dropdown: Found {len(pdf_mapping)} PDF files")
+        
         options = [
             {"label": f"{date} - {filename}", "value": filename}
             for date, filename in pdf_mapping.items()
         ]
+        
+        logger.info(f"PDF dropdown options: {options}")
         return options
     return []
 
