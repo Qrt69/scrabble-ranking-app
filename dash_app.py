@@ -867,6 +867,29 @@ def make_management_tab():
         
         html.Hr(className="my-4"),
         
+        # PDF Management Section
+        html.H4("📄 PDF Verslagen Beheer", className="mb-3", style={"color": "#2c3e50"}),
+        html.P("Beheer de wedstrijdverslagen (PDF bestanden). Je kunt PDF verslagen verwijderen die niet meer nodig zijn.", className="text-muted mb-3"),
+        
+        html.Div([
+            html.Label("Selecteer PDF verslag om te verwijderen:", className="mb-2"),
+            dcc.Dropdown(
+                id="delete-pdf-dropdown",
+                options=[],
+                placeholder="Kies een PDF verslag...",
+                style={"marginBottom": "20px"}
+            ),
+            html.Button(
+                "Verwijder geselecteerde PDF",
+                id="delete-pdf-btn",
+                className="btn btn-danger",
+                disabled=True
+            ),
+            html.Div(id="delete-pdf-status", className="mt-3")
+        ], className="mb-4"),
+        
+        html.Hr(className="my-4"),
+        
         # Member Management Section
         html.H4("👥 Leden Beheer", className="mb-3", style={"color": "#2c3e50"}),
         html.P("Beheer de leden van de club. Je kunt leden toevoegen, verwijderen en hun klasse wijzigen.", className="text-muted mb-3"),
@@ -1815,6 +1838,13 @@ def enable_delete_button(selected_game):
     return selected_game is None
 
 @app.callback(
+    Output('delete-pdf-btn', 'disabled'),
+    Input('delete-pdf-dropdown', 'value')
+)
+def enable_delete_pdf_button(selected_pdf):
+    return selected_pdf is None
+
+@app.callback(
     [Output('delete-status', 'children'),
      Output('delete-game-dropdown', 'value'),
      Output('delete-game-dropdown', 'options', allow_duplicate=True)],
@@ -1857,6 +1887,73 @@ def delete_game(n_clicks, game_nr):
         
     except Exception as e:
         return f'Fout bij verwijderen van wedstrijd: {e}', None, []
+
+@app.callback(
+    [Output('delete-pdf-status', 'children'),
+     Output('delete-pdf-dropdown', 'value'),
+     Output('delete-pdf-dropdown', 'options', allow_duplicate=True)],
+    [Input('delete-pdf-btn', 'n_clicks')],
+    [State('delete-pdf-dropdown', 'value')],
+    prevent_initial_call=True
+)
+def delete_pdf(n_clicks, pdf_filename):
+    if not n_clicks or pdf_filename is None:
+        return '', None, []
+    
+    try:
+        # Remove from local storage
+        local_path = f"Wedstrijdverslagen/{pdf_filename}"
+        assets_path = f"assets/Wedstrijdverslagen/{pdf_filename}"
+        
+        files_removed = []
+        if os.path.exists(local_path):
+            os.remove(local_path)
+            files_removed.append("local")
+            logger.info(f"Removed local PDF: {pdf_filename}")
+        
+        if os.path.exists(assets_path):
+            os.remove(assets_path)
+            files_removed.append("assets")
+            logger.info(f"Removed assets PDF: {pdf_filename}")
+        
+        # Remove from Dropbox if available
+        if USE_DROPBOX:
+            dropbox_manager = dropbox_integration.get_dropbox_manager()
+            if dropbox_manager:
+                # Try to remove from main folder
+                dropbox_path = f"{dropbox_manager.app_folder}/{pdf_filename}"
+                try:
+                    dropbox_manager.dbx.files_delete_v2(dropbox_path)
+                    files_removed.append("Dropbox")
+                    logger.info(f"Removed from Dropbox: {pdf_filename}")
+                except Exception as e:
+                    logger.warning(f"Could not remove from Dropbox main folder: {e}")
+                
+                # Try to remove from Wedstrijdverslagen subfolder
+                dropbox_subfolder_path = f"{dropbox_manager.app_folder}/Wedstrijdverslagen/{pdf_filename}"
+                try:
+                    dropbox_manager.dbx.files_delete_v2(dropbox_subfolder_path)
+                    files_removed.append("Dropbox subfolder")
+                    logger.info(f"Removed from Dropbox subfolder: {pdf_filename}")
+                except Exception as e:
+                    logger.warning(f"Could not remove from Dropbox subfolder: {e}")
+        
+        # Update dropdown options
+        pdf_mapping = get_available_pdf_reports()
+        pdf_options = []
+        for date_str, filename in pdf_mapping.items():
+            pdf_options.append({
+                "label": f"{date_str} - {filename}",
+                "value": filename
+            })
+        pdf_options.sort(key=lambda x: x["label"], reverse=True)
+        
+        removed_locations = ", ".join(files_removed)
+        return f'PDF "{pdf_filename}" succesvol verwijderd uit: {removed_locations}.', None, pdf_options
+        
+    except Exception as e:
+        logger.error(f"Error deleting PDF: {e}")
+        return f'Fout bij verwijderen van PDF: {e}', None, []
 
 # Add a callback for the drilldown export
 @app.callback(
@@ -1936,6 +2033,32 @@ def update_delete_dropdown_options(tab_value, season_value):
         for _, row in games.iterrows()
     ]
     return game_options
+
+# Callback to populate PDF dropdown
+@app.callback(
+    Output("delete-pdf-dropdown", "options"),
+    [Input("tabs", "value")],
+    prevent_initial_call=False
+)
+def update_pdf_dropdown_options(tab_value):
+    if tab_value != "tab-management":
+        return []
+    
+    # Get available PDF reports
+    pdf_mapping = get_available_pdf_reports()
+    
+    # Create dropdown options
+    pdf_options = []
+    for date_str, filename in pdf_mapping.items():
+        pdf_options.append({
+            "label": f"{date_str} - {filename}",
+            "value": filename
+        })
+    
+    # Sort by date (most recent first)
+    pdf_options.sort(key=lambda x: x["label"], reverse=True)
+    
+    return pdf_options
 
 # Authentication callbacks
 @app.callback(
