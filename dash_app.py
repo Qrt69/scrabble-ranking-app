@@ -486,7 +486,7 @@ def load_current_data():
     logger.info("Syncing Excel files from Dropbox...")
     print("=== DEBUG: Starting Dropbox sync ===")
     try:
-        required_files = ["Globaal 2024-2025.xlsx", "Zomer 2025.xlsx", "Info.xlsx"]
+        required_files = ["Globaal 2024-2025.xlsx", "Zomer 2025.xlsx"]
         print(f"=== DEBUG: Required files: {required_files} ===")
         
         dropbox_manager = dropbox_integration.get_dropbox_manager()
