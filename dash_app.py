@@ -28,15 +28,22 @@ logger = logging.getLogger(__name__)
 DROPBOX_ACCESS_TOKEN = os.environ.get("DROPBOX_TOKEN", "")
 USE_DROPBOX = bool(DROPBOX_ACCESS_TOKEN)
 
+print(f"=== DEBUG: DROPBOX_TOKEN found: {bool(DROPBOX_ACCESS_TOKEN)} ===")
+print(f"=== DEBUG: USE_DROPBOX: {USE_DROPBOX} ===")
+
 if USE_DROPBOX:
     logger.info("Initializing Dropbox integration...")
+    print("=== DEBUG: About to initialize Dropbox ===")
     if dropbox_integration.initialize_dropbox(DROPBOX_ACCESS_TOKEN):
         logger.info("Dropbox integration successful")
+        print("=== DEBUG: Dropbox initialization successful ===")
     else:
         logger.error("Dropbox integration failed - falling back to local files")
+        print("=== DEBUG: Dropbox initialization failed ===")
         USE_DROPBOX = False
 else:
     logger.info("No Dropbox access token found - using local files only")
+    print("=== DEBUG: No Dropbox token found ===")
 
 importlib.reload(tools)
 
