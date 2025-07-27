@@ -16,10 +16,15 @@ class DropboxManager:
     def test_connection(self):
         """Test if Dropbox connection works"""
         try:
-            self.dbx.users_get_current_account()
+            print("=== DEBUG: test_connection: calling users_get_current_account() ===")
+            account = self.dbx.users_get_current_account()
+            print(f"=== DEBUG: test_connection: got account: {account.name.display_name} ===")
             logger.info("Dropbox connection successful")
             return True
         except Exception as e:
+            print(f"=== DEBUG: test_connection exception: {e} ===")
+            import traceback
+            print(f"=== DEBUG: test_connection traceback: {traceback.format_exc()} ===")
             logger.error(f"Dropbox connection failed: {e}")
             return False
     
@@ -135,8 +140,24 @@ dropbox_manager = None
 def initialize_dropbox(access_token):
     """Initialize the global Dropbox manager"""
     global dropbox_manager
-    dropbox_manager = DropboxManager(access_token)
-    return dropbox_manager.test_connection()
+    
+    print(f"=== DEBUG: initialize_dropbox called with token length: {len(access_token)} ===")
+    
+    try:
+        print("=== DEBUG: Creating DropboxManager instance ===")
+        dropbox_manager = DropboxManager(access_token)
+        print("=== DEBUG: DropboxManager created successfully ===")
+        
+        print("=== DEBUG: Testing connection ===")
+        connection_result = dropbox_manager.test_connection()
+        print(f"=== DEBUG: test_connection returned: {connection_result} ===")
+        
+        return connection_result
+    except Exception as e:
+        print(f"=== DEBUG: Exception in initialize_dropbox: {e} ===")
+        import traceback
+        print(f"=== DEBUG: Full traceback: {traceback.format_exc()} ===")
+        return False
 
 def get_dropbox_manager():
     """Get the global Dropbox manager instance"""

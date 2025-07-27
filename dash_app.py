@@ -30,13 +30,18 @@ USE_DROPBOX = bool(DROPBOX_ACCESS_TOKEN)
 
 print(f"=== DEBUG: Dropbox configuration ===")
 print(f"=== DEBUG: DROPBOX_TOKEN from env: {'Present' if DROPBOX_ACCESS_TOKEN else 'Missing'} ===")
+print(f"=== DEBUG: Token length: {len(DROPBOX_ACCESS_TOKEN)} ===")
 print(f"=== DEBUG: USE_DROPBOX: {USE_DROPBOX} ===")
 
 if USE_DROPBOX:
     logger.info("Initializing Dropbox integration...")
     print("=== DEBUG: Initializing Dropbox integration ===")
     try:
-        if dropbox_integration.initialize_dropbox(DROPBOX_ACCESS_TOKEN):
+        print("=== DEBUG: Calling dropbox_integration.initialize_dropbox() ===")
+        result = dropbox_integration.initialize_dropbox(DROPBOX_ACCESS_TOKEN)
+        print(f"=== DEBUG: initialize_dropbox() returned: {result} ===")
+        
+        if result:
             logger.info("Dropbox integration successful")
             print("=== DEBUG: Dropbox integration successful ===")
         else:
@@ -46,6 +51,8 @@ if USE_DROPBOX:
     except Exception as e:
         logger.error(f"Dropbox initialization error: {e} - falling back to local files")
         print(f"=== DEBUG: Dropbox initialization exception: {e} ===")
+        import traceback
+        print(f"=== DEBUG: Full traceback: {traceback.format_exc()} ===")
         USE_DROPBOX = False
 else:
     logger.info("No Dropbox access token found - using local files only")
@@ -451,7 +458,7 @@ def load_current_data():
     # For online app, we MUST have Dropbox for persistent storage
     if not USE_DROPBOX:
         logger.error("No Dropbox integration available - app cannot function without persistent storage")
-        print("=== DEBUG: Dropbox integration disabled - using local files ===")
+        print("=== DEBUG: Dropbox integration disabled - app cannot function ===")
         # Initialize with empty data and show error message
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
@@ -477,7 +484,7 @@ def load_current_data():
             
             if not synced_files:
                 logger.error("No files synced from Dropbox - app cannot function")
-                print("=== DEBUG: No files synced from Dropbox ===")
+                print("=== DEBUG: No files synced from Dropbox - app cannot function ===")
                 # Initialize with empty data
                 df_global = pd.DataFrame()
                 df_gen_info = pd.DataFrame()
@@ -487,7 +494,7 @@ def load_current_data():
                 return
         else:
             logger.error("Dropbox manager not available - app cannot function")
-            print("=== DEBUG: Dropbox manager is None ===")
+            print("=== DEBUG: Dropbox manager is None - app cannot function ===")
             # Initialize with empty data
             df_global = pd.DataFrame()
             df_gen_info = pd.DataFrame()
@@ -497,7 +504,7 @@ def load_current_data():
             return
     except Exception as e:
         logger.error(f"Dropbox sync error: {e} - app cannot function without data")
-        print(f"=== DEBUG: Dropbox sync exception: {e} ===")
+        print(f"=== DEBUG: Dropbox sync exception: {e} - app cannot function ===")
         # Initialize with empty data
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
