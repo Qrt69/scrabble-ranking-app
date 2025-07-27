@@ -20,9 +20,9 @@ def upload_files_to_dropbox():
     """Upload current Excel files to Dropbox"""
     
     # Check if Dropbox access token is available
-    access_token = os.environ.get("DROPBOX_ACCESS_TOKEN")
+    access_token = os.environ.get("DROPBOX_TOKEN")
     if not access_token:
-        print("❌ Error: DROPBOX_ACCESS_TOKEN environment variable not set")
+        print("❌ Error: DROPBOX_TOKEN environment variable not set")
         print("Please set your Dropbox access token as an environment variable")
         return False
     

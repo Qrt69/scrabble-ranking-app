@@ -25,7 +25,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Dropbox configuration
-DROPBOX_ACCESS_TOKEN = os.environ.get("DROPBOX_ACCESS_TOKEN", "")
+DROPBOX_ACCESS_TOKEN = os.environ.get("DROPBOX_TOKEN", "")
 USE_DROPBOX = bool(DROPBOX_ACCESS_TOKEN)
 
 if USE_DROPBOX:
