@@ -433,7 +433,7 @@ def load_current_data():
     
     print("=== DEBUG: Inside load_current_data() ===")
     
-    # Sync with Dropbox if available
+        # Sync with Dropbox if available
     if USE_DROPBOX:
         logger.info("Syncing Excel files from Dropbox...")
         required_files = ["Globaal 2024-2025.xlsx", "Zomer 2025.xlsx", "Info.xlsx"]
@@ -441,6 +441,17 @@ def load_current_data():
         if dropbox_manager:
             synced_files = dropbox_manager.sync_excel_files(required_files)
             logger.info(f"Synced {len(synced_files)} files from Dropbox: {synced_files}")
+            
+            # Debug: Check file sizes after sync
+            for filename in required_files:
+                if os.path.exists(filename):
+                    size = os.path.getsize(filename)
+                    logger.info(f"After sync - {filename}: {size} bytes")
+                    try:
+                        df = pd.read_excel(filename, sheet_name="Globaal")
+                        logger.info(f"After sync - {filename}: {len(df)} rows loaded")
+                    except Exception as e:
+                        logger.error(f"Error reading {filename} after sync: {e}")
     
     # Get available seasons
     available_seasons = get_available_seasons()
