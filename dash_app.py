@@ -16,91 +16,83 @@ import re
 import json
 import logging
 import dropbox_integration
-import dropbox
 
 from dash.dash_table.Format import Format, Scheme
 from dash.dependencies import ALL
 
-print("=== DEBUG: Starting app initialization ===")
-
-# Configure logging
+# Set up logging for production debugging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Dropbox configuration
+# Dropbox configuration - support both access token and refresh token
 DROPBOX_ACCESS_TOKEN = os.environ.get("DROPBOX_TOKEN", "")
-USE_DROPBOX = bool(DROPBOX_ACCESS_TOKEN)
+DROPBOX_APP_KEY = os.environ.get("DROPBOX_APP_KEY", "")
+DROPBOX_APP_SECRET = os.environ.get("DROPBOX_APP_SECRET", "")
+DROPBOX_REFRESH_TOKEN = os.environ.get("DROPBOX_REFRESH_TOKEN", "")
+
+# Use refresh token if available, otherwise fall back to access token
+USE_DROPBOX = bool(DROPBOX_REFRESH_TOKEN and DROPBOX_APP_KEY and DROPBOX_APP_SECRET) or bool(DROPBOX_ACCESS_TOKEN)
 
 if USE_DROPBOX:
     logger.info("Initializing Dropbox integration...")
     try:
-        result = dropbox_integration.initialize_dropbox(DROPBOX_ACCESS_TOKEN)
-        
-        if result:
-            logger.info("Dropbox integration successful")
+        if DROPBOX_REFRESH_TOKEN and DROPBOX_APP_KEY and DROPBOX_APP_SECRET:
+            # Use refresh token for long-term access
+            logger.info("Using refresh token for Dropbox authentication")
+            if dropbox_integration.initialize_dropbox(
+                app_key=DROPBOX_APP_KEY,
+                app_secret=DROPBOX_APP_SECRET,
+                refresh_token=DROPBOX_REFRESH_TOKEN
+            ):
+                logger.info("Dropbox integration successful with refresh token")
+            else:
+                logger.error("Dropbox integration failed with refresh token")
+                USE_DROPBOX = False
+        elif DROPBOX_ACCESS_TOKEN:
+            # Fall back to access token (temporary solution)
+            logger.info("Using access token for Dropbox authentication (will expire)")
+            if dropbox_integration.initialize_dropbox(access_token=DROPBOX_ACCESS_TOKEN):
+                logger.info("Dropbox integration successful with access token")
+            else:
+                logger.error("Dropbox integration failed with access token")
+                USE_DROPBOX = False
         else:
-            logger.error("Dropbox integration failed - falling back to local files")
+            logger.error("No valid Dropbox credentials found")
             USE_DROPBOX = False
     except Exception as e:
-        logger.error(f"Dropbox initialization error: {e} - falling back to local files")
+        logger.error(f"Dropbox initialization error: {e}")
         USE_DROPBOX = False
 else:
-    logger.info("No Dropbox access token found - using local files only")
+    logger.info("No Dropbox credentials found - app cannot function without persistent storage")
 
 importlib.reload(tools)
 
 def sync_pdf_files():
-    """Sync PDF files from Dropbox to local storage and assets"""
+    """Sync PDF files from Wedstrijdverslagen to assets/Wedstrijdverslagen"""
     import shutil
     import glob
     
-    # For online app, we need Dropbox to have any data
-    if not USE_DROPBOX:
-        logger.warning("No Dropbox integration - cannot sync PDF files")
-        return
+    source_dir = "Wedstrijdverslagen"
+    target_dir = "assets/Wedstrijdverslagen"
     
-    try:
-        dropbox_manager = dropbox_integration.get_dropbox_manager()
-        if not dropbox_manager:
-            logger.error("Dropbox manager not available - cannot sync PDF files")
-            return
+    # Create target directory if it doesn't exist
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir)
+    
+    # Get all PDF files from source directory
+    source_files = glob.glob(os.path.join(source_dir, "*.pdf"))
+    
+    # Copy each file to target directory
+    for source_file in source_files:
+        filename = os.path.basename(source_file)
+        target_file = os.path.join(target_dir, filename)
         
-        # Create local directories
-        local_dir = "Wedstrijdverslagen"
-        assets_dir = "assets/Wedstrijdverslagen"
-        
-        for directory in [local_dir, assets_dir]:
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-                logger.info(f"Created directory: {directory}")
-        
-        # List PDF files in Dropbox
-        dropbox_files = dropbox_manager.list_files()
-        pdf_files = [f for f in dropbox_files if f['name'].endswith('.pdf')]
-        
-        logger.info(f"Found {len(pdf_files)} PDF files in Dropbox")
-        
-        # Download each PDF file
-        for pdf_file in pdf_files:
-            filename = pdf_file['name']
-            dropbox_path = f"{dropbox_manager.app_folder}/{filename}"
-            local_path = os.path.join(local_dir, filename)
-            assets_path = os.path.join(assets_dir, filename)
-            
-            # Download to local directory
-            if dropbox_manager.download_file(dropbox_path, local_path):
-                logger.info(f"Downloaded PDF from Dropbox: {filename}")
-                
-                # Copy to assets directory for web serving
-                shutil.copy2(local_path, assets_path)
-                logger.info(f"Copied PDF to assets: {filename}")
-            else:
-                logger.error(f"Failed to download PDF from Dropbox: {filename}")
-        
-        logger.info(f"PDF sync complete. {len(pdf_files)} files processed.")
-        
-    except Exception as e:
-        logger.error(f"Error syncing PDF files: {e}")
+        # Only copy if target doesn't exist or source is newer
+        if not os.path.exists(target_file) or os.path.getmtime(source_file) > os.path.getmtime(target_file):
+            shutil.copy2(source_file, target_file)
+            logger.info(f"Synced: {filename}")
+    
+    logger.info(f"PDF sync complete. {len(source_files)} files processed.")
 
 # Sync PDF files on startup
 sync_pdf_files()
@@ -467,13 +459,10 @@ def load_current_data():
     global df_global, df_gen_info, df_pct_final, df_rp_final, df_pts_final, current_filename, available_seasons
     
     print("=== DEBUG: Inside load_current_data() ===")
-    print(f"=== DEBUG: USE_DROPBOX = {USE_DROPBOX} ===")
-    print(f"=== DEBUG: DROPBOX_ACCESS_TOKEN present = {bool(DROPBOX_ACCESS_TOKEN)} ===")
     
     # For online app, we MUST have Dropbox for persistent storage
     if not USE_DROPBOX:
         logger.error("No Dropbox integration available - app cannot function without persistent storage")
-        print("=== DEBUG: Dropbox integration disabled - app cannot function ===")
         # Initialize with empty data and show error message
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
@@ -484,14 +473,9 @@ def load_current_data():
     
     # Sync with Dropbox - this is required for online app
     logger.info("Syncing Excel files from Dropbox...")
-    print("=== DEBUG: Starting Dropbox sync ===")
     try:
-        required_files = ["Globaal 2024-2025.xlsx", "Zomer 2025.xlsx"]
-        print(f"=== DEBUG: Required files: {required_files} ===")
-        
+        required_files = ["Globaal 2024-2025.xlsx", "Zomer 2025.xlsx", "Info.xlsx"]
         dropbox_manager = dropbox_integration.get_dropbox_manager()
-        print(f"=== DEBUG: Dropbox manager available: {dropbox_manager is not None} ===")
-        
         if dropbox_manager:
             synced_files = dropbox_manager.sync_excel_files(required_files)
             logger.info(f"Synced {len(synced_files)} files from Dropbox: {synced_files}")
@@ -526,16 +510,21 @@ def load_current_data():
     
     # Get available seasons
     available_seasons = get_available_seasons()
+    print(f"=== DEBUG: Available seasons: {[s['value'] for s in available_seasons]} ===")
     
     current_filename = get_current_season_filename()
+    print(f"=== DEBUG: Current filename determined: {current_filename} ===")
     
     # Check if current season file exists
     if os.path.exists(current_filename):
         filename = current_filename
+        print(f"=== DEBUG: Using current season file: {filename} ===")
     elif available_seasons:
         filename = available_seasons[0]["value"]
         current_filename = filename
+        print(f"=== DEBUG: Using first available season: {filename} ===")
     else:
+        print("=== DEBUG: No data files found - initializing with empty data ===")
         # No data available
         df_global = pd.DataFrame()
         df_gen_info = pd.DataFrame()
@@ -544,13 +533,34 @@ def load_current_data():
         df_pts_final = pd.DataFrame()
         return
     
+    print(f"=== DEBUG: About to load data from: {filename} ===")
     load_data_for_season(filename)
 
+# Debug: Check what files exist
+print("=== DEBUG: Checking files ===")
+print(f"Current directory: {os.getcwd()}")
+files = os.listdir('.')
+excel_files = [f for f in files if f.endswith('.xlsx')]
+print(f"Excel files found: {excel_files}")
+
+for file in excel_files:
+    if os.path.exists(file):
+        print(f"  {file} exists ({os.path.getsize(file)} bytes)")
+        try:
+            xl = pd.ExcelFile(file)
+            print(f"    Sheets: {xl.sheet_names}")
+        except Exception as e:
+            print(f"    Error reading: {e}")
+
 # Load initial data
+print("=== DEBUG: About to call load_current_data() ===")
 try:
     load_current_data()
+    print("=== DEBUG: load_current_data() completed successfully ===")
 except Exception as e:
-    logger.error(f"Error in load_current_data(): {e}")
+    print(f"=== DEBUG: Error in load_current_data(): {e} ===")
+    import traceback
+    print(f"=== DEBUG: Traceback: {traceback.format_exc()} ===")
 
 # Member management functions
 def load_member_data():
@@ -1002,64 +1012,10 @@ def get_season_filename(date_str):
             end_year = year
         return f'Globaal {start_year}-{end_year}.xlsx'
 
-# Create Dash app
 app = dash.Dash(__name__, external_stylesheets=[
     dbc.themes.BOOTSTRAP,
     "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
 ], suppress_callback_exceptions=True, assets_folder='assets')
-
-# Add a simple test endpoint
-@app.server.route('/test-dropbox')
-def test_dropbox():
-    """Test Dropbox connection directly"""
-    import dropbox
-    
-    token = os.environ.get("DROPBOX_TOKEN", "")
-    
-    result = f"""
-    <h1>Dropbox Token Test</h1>
-    <p><strong>Token present:</strong> {'Yes' if token else 'No'}</p>
-    <p><strong>Token length:</strong> {len(token)}</p>
-    <p><strong>Token starts with:</strong> {token[:10] if token else 'N/A'}...</p>
-    <p><strong>Token is empty:</strong> {token == ''}</p>
-    <p><strong>Token is whitespace only:</strong> {token.strip() == '' if token else 'N/A'}</p>
-    <p><strong>Token format correct:</strong> {token.startswith('sl.') if token else 'N/A'}</p>
-    """
-    
-    if token and token.startswith('sl.'):
-        try:
-            dbx = dropbox.Dropbox(token)
-            account = dbx.users_get_current_account()
-            result += f"<p><strong>✅ Connection successful:</strong> {account.name.display_name} ({account.email})</p>"
-            
-            # Test listing files
-            files = dbx.files_list_folder("")
-            result += f"<p><strong>✅ Can list files:</strong> {len(files.entries)} items found</p>"
-            
-            # Look for Scrabble App folder
-            app_folder = None
-            for entry in files.entries:
-                if hasattr(entry, 'name') and entry.name == "Scrabble App":
-                    app_folder = entry
-                    break
-            
-            if app_folder:
-                app_files = dbx.files_list_folder("/Scrabble App")
-                result += f"<p><strong>✅ Scrabble App folder found:</strong> {len(app_files.entries)} files</p>"
-                for entry in app_files.entries:
-                    if hasattr(entry, 'size'):
-                        result += f"<p>   - {entry.name} ({entry.size} bytes)</p>"
-            else:
-                result += "<p><strong>❌ Scrabble App folder not found</strong></p>"
-                result += "<p>Available folders:</p>"
-                for entry in files.entries:
-                    if not hasattr(entry, 'size'):
-                        result += f"<p>   - {entry.name}</p>"
-                        
-        except Exception as e:
-            result += f"<p><strong>❌ Connection failed:</strong> {e}</p>"
-    
-    return result
 
 # Add print styles
 app.index_string = '''

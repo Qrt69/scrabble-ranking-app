@@ -1,2 +1,11 @@
-# Copy this file to .env and replace with your actual Dropbox access token
-DROPBOX_TOKEN=sl.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx 
+# Copy this file to .env and replace with your actual Dropbox credentials
+
+# Option 1: Refresh Token (Recommended for production - long-term access)
+# Get these from https://www.dropbox.com/developers/apps
+DROPBOX_APP_KEY=your_app_key_here
+DROPBOX_APP_SECRET=your_app_secret_here
+DROPBOX_REFRESH_TOKEN=your_refresh_token_here
+
+# Option 2: Access Token (Temporary - expires in 4 hours)
+# Use this only for testing, not for production
+# DROPBOX_TOKEN=sl.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx 
