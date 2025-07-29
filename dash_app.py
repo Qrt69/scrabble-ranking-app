@@ -1018,72 +1018,7 @@ app = dash.Dash(__name__, external_stylesheets=[
     "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
 ], suppress_callback_exceptions=True, assets_folder='assets')
 
-# Add a debug endpoint for Dropbox testing
-@app.server.route('/debug-dropbox')
-def debug_dropbox():
-    """Debug Dropbox connection"""
-    import dropbox
-    
-    # Get environment variables
-    app_key = os.environ.get("DROPBOX_APP_KEY", "")
-    app_secret = os.environ.get("DROPBOX_APP_SECRET", "")
-    refresh_token = os.environ.get("DROPBOX_REFRESH_TOKEN", "")
-    access_token = os.environ.get("DROPBOX_TOKEN", "")
-    
-    result = f"""
-    <h1>Dropbox Debug</h1>
-    <p><strong>App Key present:</strong> {'Yes' if app_key else 'No'}</p>
-    <p><strong>App Secret present:</strong> {'Yes' if app_secret else 'No'}</p>
-    <p><strong>Refresh Token present:</strong> {'Yes' if refresh_token else 'No'}</p>
-    <p><strong>Access Token present:</strong> {'Yes' if access_token else 'No'}</p>
-    <p><strong>USE_DROPBOX:</strong> {USE_DROPBOX}</p>
-    """
-    
-    # Test refresh token connection
-    if app_key and app_secret and refresh_token:
-        result += "<h2>Testing Refresh Token Connection</h2>"
-        try:
-            dbx = dropbox.Dropbox(
-                oauth2_refresh_token=refresh_token,
-                app_key=app_key,
-                app_secret=app_secret
-            )
-            
-            # Test the connection
-            account = dbx.users_get_current_account()
-            result += f"<p><strong>✅ Refresh token connection successful!</strong></p>"
-            result += f"<p>Account: {account.name.display_name} ({account.email})</p>"
-            
-            # Test listing files
-            try:
-                files = dbx.files_list_folder("/Scrabble App")
-                result += f"<p><strong>✅ Can list files:</strong> {len(files.entries)} items found</p>"
-                for entry in files.entries:
-                    if hasattr(entry, 'size'):
-                        result += f"<p>   - {entry.name} ({entry.size} bytes)</p>"
-                    else:
-                        result += f"<p>   - {entry.name} (folder)</p>"
-            except Exception as e:
-                result += f"<p><strong>❌ Error listing files:</strong> {e}</p>"
-            
-        except Exception as e:
-            result += f"<p><strong>❌ Refresh token connection failed:</strong> {e}</p>"
-    
-    # Test access token connection (fallback)
-    elif access_token:
-        result += "<h2>Testing Access Token Connection</h2>"
-        try:
-            dbx = dropbox.Dropbox(access_token)
-            account = dbx.users_get_current_account()
-            result += f"<p><strong>✅ Access token connection successful!</strong></p>"
-            result += f"<p>Account: {account.name.display_name} ({account.email})</p>"
-        except Exception as e:
-            result += f"<p><strong>❌ Access token connection failed:</strong> {e}</p>"
-    
-    else:
-        result += "<p><strong>❌ No valid Dropbox credentials found</strong></p>"
-    
-    return result
+
 
 # Add print styles
 app.index_string = '''
