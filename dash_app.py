@@ -296,7 +296,7 @@ def get_summer_highlighting_data():
     except:
         return []
     
-    for _, player_data in df_global.groupby('Naam'):
+    for player_name, player_data in df_global.groupby('Naam'):
         games_played = len(player_data)
         
         if games_played <= 5:
@@ -318,7 +318,7 @@ def get_summer_highlighting_data():
             if date in date_columns:
                 highlighting.append({
                     "if": {
-                        "filter_query": f"{{Naam}} = '{player_data['Naam'].iloc[0]}'",
+                        "filter_query": f"{{Naam}} = '{player_name}'",
                         "column_id": date
                     },
                     "color": "#999999",  # Gray color for non-counting games
@@ -568,11 +568,7 @@ def load_member_data():
     """Load member data from JSON file or create from Excel if not exists"""
     json_file = "members.json"
     
-    # For online app, we need Dropbox to have any data
-    if not USE_DROPBOX:
-        logger.error("No Dropbox integration - cannot load member data")
-        return pd.DataFrame()
-    
+    # Try to load from JSON first
     if os.path.exists(json_file):
         try:
             with open(json_file, 'r', encoding='utf-8') as f:
@@ -582,7 +578,7 @@ def load_member_data():
         except Exception as e:
             logger.error(f"Error loading members.json: {e}")
     
-    # If JSON doesn't exist, create from Excel file (which should be synced from Dropbox)
+    # If JSON doesn't exist, create from Excel file
     if os.path.exists("Info.xlsx"):
         try:
             df_leden = pd.read_excel("Info.xlsx", sheet_name="Leden")
