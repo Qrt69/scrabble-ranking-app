@@ -35,10 +35,6 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for Render.com deployment instructions.
 - **Excel exports** for all tables
 - **Print functionality** for paper copies
 
-## 🔐 Admin Access
-
-Default password: `scrabble2025`
-
 ## 📁 Files
 
 - `dash_app.py` - Main application
