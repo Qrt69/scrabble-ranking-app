@@ -318,8 +318,8 @@ def get_summer_highlighting_data():
             if date in date_columns:
                 highlighting.append({
                     "if": {
-                        "filter_query": f"{{Naam}} = '{player_name}'",
-                        "column_id": date
+                        "column_id": date,
+                        "filter_query": f"{{Naam}} = '{player_name}'"
                     },
                     "color": "#999999",  # Gray color for non-counting games
                     "fontStyle": "italic"
