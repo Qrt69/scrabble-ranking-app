@@ -407,11 +407,21 @@ def load_data_for_season(filename):
             print(f"=== DEBUG: Successfully read {filename} with 'globaal' sheet: {len(df_global)} rows ===")
         
         print(f"=== DEBUG: Columns in df_global: {list(df_global.columns)} ===")
-        df_global['Datum_dt'] = pd.to_datetime(df_global['Datum'], dayfirst=True)
+        
+        # Check if Datum_dt already exists, if not create it
+        if 'Datum_dt' not in df_global.columns:
+            df_global['Datum_dt'] = pd.to_datetime(df_global['Datum'], dayfirst=True)
+        else:
+            print("=== DEBUG: Datum_dt column already exists, using existing values ===")
+        
         df_global = df_global.sort_values('Datum_dt').copy()
         
-        # Smart game numbering: preserve original positions when possible
-        df_global = assign_smart_game_numbers(df_global)
+        # Check if GameNr already exists, if not create it
+        if 'GameNr' not in df_global.columns:
+            # Smart game numbering: preserve original positions when possible
+            df_global = assign_smart_game_numbers(df_global)
+        else:
+            print("=== DEBUG: GameNr column already exists, using existing values ===")
         
         df_global['Datum'] = df_global['Datum_dt'].dt.strftime('%d/%m/%Y')
         
@@ -427,7 +437,7 @@ def load_data_for_season(filename):
         
         df_rankingpct = tools.make_pivot(df_global, 'Naam', 'Datum', 'Percent')
         # Use the appropriate percentage column based on season type
-        if current_filename and current_filename.startswith('Zomer'):
+        if filename.startswith('Zomer'):
             columns_pct = ['Naam', 'Klasse', 'Tot. T. MAX', 'Tot. Score', '% (Alle)', '% (Beste 5)'] 
             df_pct_final = tools.process_final_df(df_gen_info, df_rankingpct, columns_pct, '% (Beste 5)')
         else:
@@ -1680,8 +1690,11 @@ def process_upload(date, contents, filename):
         df_new['Datum_dt'] = pd.to_datetime(df_new['Datum'], dayfirst=True)
         df_new = assign_smart_game_numbers(df_new)
         
+        # Remove processing columns before saving to Excel
+        df_new_clean = df_new.drop(columns=['Datum_dt', 'GameNr'], errors='ignore')
+        
         try:
-            df_new.to_excel(season_filename, sheet_name='Globaal', index=False)
+            df_new_clean.to_excel(season_filename, sheet_name='Globaal', index=False)
             logger.info(f"Successfully saved {len(df_new)} rows to {season_filename}")
             
             # Backup to Dropbox - required for online app
@@ -1914,9 +1927,12 @@ def delete_game(n_clicks, game_nr):
         df_updated['Datum_dt'] = pd.to_datetime(df_updated['Datum'], dayfirst=True)
         df_updated = assign_smart_game_numbers(df_updated)
         
+        # Remove processing columns before saving to Excel
+        df_updated_clean = df_updated.drop(columns=['Datum_dt', 'GameNr'], errors='ignore')
+        
         # Save updated file
         if current_filename:
-            df_updated.to_excel(current_filename, sheet_name='Globaal', index=False)
+            df_updated_clean.to_excel(current_filename, sheet_name='Globaal', index=False)
         else:
             return 'Geen bestand geselecteerd voor opslag.', None, []
         
