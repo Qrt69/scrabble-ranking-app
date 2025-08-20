@@ -283,7 +283,9 @@ def get_available_pdf_reports():
 
 def get_summer_highlighting_data():
     """Get highlighting data for summer competition best 5 rule"""
+    import logging
     if df_global is None or df_global.empty:
+        logging.info("=== DEBUG: get_summer_highlighting_data - df_global is None or empty ===")
         return []
     
     highlighting = []
@@ -293,7 +295,9 @@ def get_summer_highlighting_data():
     try:
         df_rankingpct = tools.make_pivot(df_global, 'Naam', 'Datum', 'Percent')
         date_columns = df_rankingpct.columns.tolist()
-    except:
+        logging.info(f"=== DEBUG: get_summer_highlighting_data - date_columns: {date_columns} ===")
+    except Exception as e:
+        logging.error(f"=== DEBUG: get_summer_highlighting_data - Error creating pivot: {e} ===")
         return []
     
     for player_name, player_data in df_global.groupby('Naam'):
@@ -720,9 +724,15 @@ def make_table(df, table_id, title, klasse_filter_id=None):
     # Add summer rule highlighting for Ranking Percent table
     if table_id == "table-pct" and current_filename and current_filename.startswith('Zomer'):
         # Get the summer highlighting data
-        summer_highlighting = get_summer_highlighting_data()
-        if summer_highlighting:
-            style_data_conditional.extend(summer_highlighting)
+        import logging
+        logging.info("=== DEBUG: make_table - About to call get_summer_highlighting_data ===")
+        try:
+            summer_highlighting = get_summer_highlighting_data()
+            logging.info(f"=== DEBUG: make_table - summer_highlighting length: {len(summer_highlighting)} ===")
+            if summer_highlighting:
+                style_data_conditional.extend(summer_highlighting)
+        except Exception as e:
+            logging.error(f"=== DEBUG: make_table - Error in get_summer_highlighting_data: {e} ===")
 
     button_group = []
     if klasse_filter_id:
