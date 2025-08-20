@@ -191,7 +191,7 @@ def make_pivot(dfp, pindex, pcols, pvalues, force_int=False, fill_blank=True):
     elif fill_blank:
         # Round numeric values to 2 decimal places and format as strings before filling blanks
         pivot_to_return = pivot_to_return.round(2)
-        pivot_to_return = pivot_to_return.applymap(lambda x: f"{float(x):.2f}" if pd.notnull(x) and x != '' and str(x).replace('.', '').replace('-', '').isdigit() else x)
+        pivot_to_return = pivot_to_return.map(lambda x: f"{float(x):.2f}" if pd.notnull(x) and x != '' and str(x).replace('.', '').replace('-', '').isdigit() else x)
         pivot_to_return = pivot_to_return.fillna('')  # Replace NaN with blank strings
 
     return pivot_to_return
