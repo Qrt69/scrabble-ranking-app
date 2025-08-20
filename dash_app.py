@@ -300,9 +300,9 @@ def get_summer_highlighting_data():
         logging.error(f"=== DEBUG: get_summer_highlighting_data - Error creating pivot: {e} ===")
         return []
     
-    # Filter for players with valid classes only
+    # Filter for players with valid classes only (exclude blank/missing classes)
     valid_classes = ['A', 'B', 'C']
-    df_valid = df_global[df_global['KLASSE'].isin(valid_classes)]
+    df_valid = df_global[df_global['KLASSE'].isin(valid_classes) & df_global['KLASSE'].notna()]
     
     for player_name, player_data in df_valid.groupby('Naam'):
         games_played = len(player_data)
@@ -736,16 +736,16 @@ def make_table(df, table_id, title, klasse_filter_id=None):
 
     # Add summer rule highlighting for Ranking Percent table
     if table_id == "table-pct" and current_filename and current_filename.startswith('Zomer'):
-        # Get the summer highlighting data
+        # TEMPORARILY DISABLE HIGHLIGHTING TO TEST TABLE RENDERING
         import logging
-        logging.info("=== DEBUG: make_table - About to call get_summer_highlighting_data ===")
-        try:
-            summer_highlighting = get_summer_highlighting_data()
-            logging.info(f"=== DEBUG: make_table - summer_highlighting length: {len(summer_highlighting)} ===")
-            if summer_highlighting:
-                style_data_conditional.extend(summer_highlighting)
-        except Exception as e:
-            logging.error(f"=== DEBUG: make_table - Error in get_summer_highlighting_data: {e} ===")
+        logging.info("=== DEBUG: make_table - HIGHLIGHTING DISABLED TO TEST TABLE RENDERING ===")
+        # try:
+        #     summer_highlighting = get_summer_highlighting_data()
+        #     logging.info(f"=== DEBUG: make_table - summer_highlighting length: {len(summer_highlighting)} ===")
+        #     if summer_highlighting:
+        #         style_data_conditional.extend(summer_highlighting)
+        # except Exception as e:
+        #     logging.error(f"=== DEBUG: make_table - Error in get_summer_highlighting_data: {e} ===")
 
     button_group = []
     if klasse_filter_id:
