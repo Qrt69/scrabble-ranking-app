@@ -723,16 +723,16 @@ def make_table(df, table_id, title, klasse_filter_id=None):
 
     # Add summer rule highlighting for Ranking Percent table
     if table_id == "table-pct" and current_filename and current_filename.startswith('Zomer'):
-        # Get the summer highlighting data
+        # TEMPORARILY DISABLE HIGHLIGHTING TO TEST
         import logging
-        logging.info("=== DEBUG: make_table - About to call get_summer_highlighting_data ===")
-        try:
-            summer_highlighting = get_summer_highlighting_data()
-            logging.info(f"=== DEBUG: make_table - summer_highlighting length: {len(summer_highlighting)} ===")
-            if summer_highlighting:
-                style_data_conditional.extend(summer_highlighting)
-        except Exception as e:
-            logging.error(f"=== DEBUG: make_table - Error in get_summer_highlighting_data: {e} ===")
+        logging.info("=== DEBUG: make_table - SUMMER HIGHLIGHTING TEMPORARILY DISABLED ===")
+        # try:
+        #     summer_highlighting = get_summer_highlighting_data()
+        #     logging.info(f"=== DEBUG: make_table - summer_highlighting length: {len(summer_highlighting)} ===")
+        #     if summer_highlighting:
+        #         style_data_conditional.extend(summer_highlighting)
+        # except Exception as e:
+        #     logging.error(f"=== DEBUG: make_table - Error in get_summer_highlighting_data: {e} ===")
 
     button_group = []
     if klasse_filter_id:
