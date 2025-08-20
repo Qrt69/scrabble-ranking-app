@@ -330,15 +330,13 @@ def get_summer_highlighting_data():
         # Add highlighting for games that don't count (gray them out)
         for date in worst_dates:
             if date in date_columns:
-                # Use a safer filter query format
+                # Use a simpler highlighting approach
                 highlighting.append({
                     "if": {
                         "column_id": date,
                         "filter_query": f"{{Naam}} = '{player_name}'"
                     },
-                    "backgroundColor": "#f0f0f0",  # Light gray background
-                    "color": "#666666",  # Darker gray text
-                    "fontStyle": "italic"
+                    "backgroundColor": "#f0f0f0"  # Just background color, no text styling
                 })
     
     logging.info(f"=== DEBUG: get_summer_highlighting_data - Created {len(highlighting)} highlighting rules ===")
@@ -736,16 +734,16 @@ def make_table(df, table_id, title, klasse_filter_id=None):
 
     # Add summer rule highlighting for Ranking Percent table
     if table_id == "table-pct" and current_filename and current_filename.startswith('Zomer'):
-        # TEMPORARILY DISABLE HIGHLIGHTING TO TEST TABLE RENDERING
+        # Get the summer highlighting data with simplified rules
         import logging
-        logging.info("=== DEBUG: make_table - HIGHLIGHTING DISABLED TO TEST TABLE RENDERING ===")
-        # try:
-        #     summer_highlighting = get_summer_highlighting_data()
-        #     logging.info(f"=== DEBUG: make_table - summer_highlighting length: {len(summer_highlighting)} ===")
-        #     if summer_highlighting:
-        #         style_data_conditional.extend(summer_highlighting)
-        # except Exception as e:
-        #     logging.error(f"=== DEBUG: make_table - Error in get_summer_highlighting_data: {e} ===")
+        logging.info("=== DEBUG: make_table - About to call get_summer_highlighting_data (simplified) ===")
+        try:
+            summer_highlighting = get_summer_highlighting_data()
+            logging.info(f"=== DEBUG: make_table - summer_highlighting length: {len(summer_highlighting)} ===")
+            if summer_highlighting:
+                style_data_conditional.extend(summer_highlighting)
+        except Exception as e:
+            logging.error(f"=== DEBUG: make_table - Error in get_summer_highlighting_data: {e} ===")
 
     button_group = []
     if klasse_filter_id:
