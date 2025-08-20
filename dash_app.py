@@ -1200,16 +1200,34 @@ def render_tab(tab, selected_season):
             pdf_section
         ])
     elif tab == "tab-pct":
-        return html.Div([
-            html.Div([
-                html.Button("Download Excel", id="download-pct-btn", className="btn btn-success me-2"),
-                html.Button("Print", id="print-pct-btn", className="btn btn-primary", 
-                          **{"data-print": "true"}),
-            ], className="mb-3"),
-            dcc.Download(id="download-pct-xlsx"),
-            make_table(df_pct_final, "table-pct", "Ranking Percent", "filter-pct"),
-            html.Div(id="drilldown-content", className="mt-4")
-        ])
+        # Add error handling for Ranking Percent tab
+        try:
+            if df_pct_final is None or df_pct_final.empty:
+                return html.Div([
+                    html.H3("Ranking Percent", className="mb-3", style={"color": "#2c3e50"}),
+                    html.P("Geen data beschikbaar voor Ranking Percent", className="text-muted"),
+                    html.P(f"Debug info: df_pct_final is {'None' if df_pct_final is None else 'empty'}", className="text-danger"),
+                    html.P(f"Current filename: {current_filename}", className="text-danger"),
+                    html.P(f"df_global shape: {df_global.shape if df_global is not None else 'None'}", className="text-danger")
+                ])
+            else:
+                return html.Div([
+                    html.Div([
+                        html.Button("Download Excel", id="download-pct-btn", className="btn btn-success me-2"),
+                        html.Button("Print", id="print-pct-btn", className="btn btn-primary", 
+                                  **{"data-print": "true"}),
+                    ], className="mb-3"),
+                    dcc.Download(id="download-pct-xlsx"),
+                    make_table(df_pct_final, "table-pct", "Ranking Percent", "filter-pct"),
+                    html.Div(id="drilldown-content", className="mt-4")
+                ])
+        except Exception as e:
+            return html.Div([
+                html.H3("Ranking Percent", className="mb-3", style={"color": "#2c3e50"}),
+                html.P(f"Fout bij het laden van Ranking Percent: {str(e)}", className="text-danger"),
+                html.P(f"Debug info: df_pct_final is {'None' if df_pct_final is None else 'empty'}", className="text-danger"),
+                html.P(f"Current filename: {current_filename}", className="text-danger")
+            ])
     elif tab == "tab-rp":
         return html.Div([
             html.Div([
