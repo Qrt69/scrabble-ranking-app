@@ -1201,19 +1201,20 @@ def render_tab(tab, selected_season):
         ])
     elif tab == "tab-pct":
         # Add error handling for Ranking Percent tab
-        print("=== DEBUG: Entering tab-pct rendering ===")
-        print(f"=== DEBUG: df_pct_final is {'None' if df_pct_final is None else 'not None'}")
+        import logging
+        logging.info("=== DEBUG: Entering tab-pct rendering ===")
+        logging.info(f"=== DEBUG: df_pct_final is {'None' if df_pct_final is None else 'not None'}")
         if df_pct_final is not None:
-            print(f"=== DEBUG: df_pct_final shape: {df_pct_final.shape}")
-            print(f"=== DEBUG: df_pct_final empty: {df_pct_final.empty}")
-        print(f"=== DEBUG: current_filename: {current_filename}")
-        print(f"=== DEBUG: df_global is {'None' if df_global is None else 'not None'}")
+            logging.info(f"=== DEBUG: df_pct_final shape: {df_pct_final.shape}")
+            logging.info(f"=== DEBUG: df_pct_final empty: {df_pct_final.empty}")
+        logging.info(f"=== DEBUG: current_filename: {current_filename}")
+        logging.info(f"=== DEBUG: df_global is {'None' if df_global is None else 'not None'}")
         if df_global is not None:
-            print(f"=== DEBUG: df_global shape: {df_global.shape}")
+            logging.info(f"=== DEBUG: df_global shape: {df_global.shape}")
         
         try:
             if df_pct_final is None or df_pct_final.empty:
-                print("=== DEBUG: df_pct_final is None or empty, returning error message ===")
+                logging.info("=== DEBUG: df_pct_final is None or empty, returning error message ===")
                 return html.Div([
                     html.H3("Ranking Percent", className="mb-3", style={"color": "#2c3e50"}),
                     html.P("Geen data beschikbaar voor Ranking Percent", className="text-muted"),
@@ -1222,7 +1223,7 @@ def render_tab(tab, selected_season):
                     html.P(f"df_global shape: {df_global.shape if df_global is not None else 'None'}", className="text-danger")
                 ])
             else:
-                print("=== DEBUG: df_pct_final exists, trying to create table ===")
+                logging.info("=== DEBUG: df_pct_final exists, trying to create table ===")
                 return html.Div([
                     html.Div([
                         html.Button("Download Excel", id="download-pct-btn", className="btn btn-success me-2"),
@@ -1234,9 +1235,9 @@ def render_tab(tab, selected_season):
                     html.Div(id="drilldown-content", className="mt-4")
                 ])
         except Exception as e:
-            print(f"=== DEBUG: Exception in tab-pct: {str(e)} ===")
+            logging.error(f"=== DEBUG: Exception in tab-pct: {str(e)} ===")
             import traceback
-            print(f"=== DEBUG: Full traceback: {traceback.format_exc()} ===")
+            logging.error(f"=== DEBUG: Full traceback: {traceback.format_exc()} ===")
             return html.Div([
                 html.H3("Ranking Percent", className="mb-3", style={"color": "#2c3e50"}),
                 html.P(f"Fout bij het laden van Ranking Percent: {str(e)}", className="text-danger"),
