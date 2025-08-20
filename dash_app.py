@@ -330,11 +330,13 @@ def get_summer_highlighting_data():
         # Add highlighting for games that don't count (gray them out)
         for date in worst_dates:
             if date in date_columns:
-                # Use a simpler highlighting approach
+                # Use a more robust filter query that handles special characters
+                # Replace problematic characters in player names
+                safe_player_name = player_name.replace("'", "").replace('"', "").replace("\\", "")
                 highlighting.append({
                     "if": {
                         "column_id": date,
-                        "filter_query": f"{{Naam}} = '{player_name}'"
+                        "filter_query": f"{{Naam}} contains '{safe_player_name}'"
                     },
                     "backgroundColor": "#f0f0f0"  # Just background color, no text styling
                 })
