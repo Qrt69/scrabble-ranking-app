@@ -307,8 +307,11 @@ def get_summer_highlighting_data():
     for player_name, player_data in df_valid.groupby('Naam'):
         games_played = len(player_data)
         
+        logging.info(f"=== DEBUG: Processing player {player_name} with {games_played} games ===")
+        
         if games_played <= 5:
             # All games count - no highlighting needed
+            logging.info(f"=== DEBUG: {player_name} has {games_played} games (≤5), skipping highlighting ===")
             continue
         
         # Player has 6+ games, need to identify which 5 count
@@ -320,6 +323,9 @@ def get_summer_highlighting_data():
         
         # Get the dates of games that don't count
         worst_dates = player_data[~player_data.index.isin(best_5_indices)]['Datum'].tolist()
+        
+        logging.info(f"=== DEBUG: {player_name} - Best 5 dates: {best_5_dates} ===")
+        logging.info(f"=== DEBUG: {player_name} - Worst dates: {worst_dates} ===")
         
         # Add highlighting for games that don't count (gray them out)
         for date in worst_dates:
