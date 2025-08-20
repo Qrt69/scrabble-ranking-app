@@ -338,7 +338,9 @@ def get_summer_highlighting_data():
                         "column_id": date,
                         "filter_query": f"{{Naam}} contains '{safe_player_name}'"
                     },
-                    "backgroundColor": "#f0f0f0"  # Just background color, no text styling
+                    "backgroundColor": "#cccccc",  # Darker gray for non-counting games
+                    "color": "#666666",  # Darker text color
+                    "fontStyle": "italic"  # Italic to indicate non-counting games
                 })
     
     logging.info(f"=== DEBUG: get_summer_highlighting_data - Created {len(highlighting)} highlighting rules ===")
