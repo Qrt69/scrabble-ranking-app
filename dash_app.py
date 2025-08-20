@@ -283,9 +283,7 @@ def get_available_pdf_reports():
 
 def get_summer_highlighting_data():
     """Get highlighting data for summer competition best 5 rule"""
-    import logging
     if df_global is None or df_global.empty:
-        logging.info("=== DEBUG: get_summer_highlighting_data - df_global is None or empty ===")
         return []
     
     highlighting = []
@@ -295,9 +293,7 @@ def get_summer_highlighting_data():
     try:
         df_rankingpct = tools.make_pivot(df_global, 'Naam', 'Datum', 'Percent')
         date_columns = df_rankingpct.columns.tolist()
-        logging.info(f"=== DEBUG: get_summer_highlighting_data - date_columns: {date_columns} ===")
     except Exception as e:
-        logging.error(f"=== DEBUG: get_summer_highlighting_data - Error creating pivot: {e} ===")
         return []
     
     # Filter for players with valid classes only (exclude blank/missing classes)
@@ -307,11 +303,8 @@ def get_summer_highlighting_data():
     for player_name, player_data in df_valid.groupby('Naam'):
         games_played = len(player_data)
         
-        logging.info(f"=== DEBUG: Processing player {player_name} with {games_played} games ===")
-        
         if games_played <= 5:
             # All games count - no highlighting needed
-            logging.info(f"=== DEBUG: {player_name} has {games_played} games (≤5), skipping highlighting ===")
             continue
         
         # Player has 6+ games, need to identify which 5 count
@@ -324,9 +317,6 @@ def get_summer_highlighting_data():
         # Get the dates of games that don't count
         worst_dates = player_data[~player_data.index.isin(best_5_indices)]['Datum'].tolist()
         
-        logging.info(f"=== DEBUG: {player_name} - Best 5 dates: {best_5_dates} ===")
-        logging.info(f"=== DEBUG: {player_name} - Worst dates: {worst_dates} ===")
-        
         # Add highlighting for games that don't count (gray them out)
         for date in worst_dates:
             if date in date_columns:
@@ -338,12 +328,10 @@ def get_summer_highlighting_data():
                         "column_id": date,
                         "filter_query": f"{{Naam}} contains '{safe_player_name}'"
                     },
-                    "backgroundColor": "#cccccc",  # Darker gray for non-counting games
-                    "color": "#666666",  # Darker text color
+                    "color": "#999999",  # Gray text color
                     "fontStyle": "italic"  # Italic to indicate non-counting games
                 })
     
-    logging.info(f"=== DEBUG: get_summer_highlighting_data - Created {len(highlighting)} highlighting rules ===")
     return highlighting
 
 def get_available_seasons():
@@ -738,16 +726,12 @@ def make_table(df, table_id, title, klasse_filter_id=None):
 
     # Add summer rule highlighting for Ranking Percent table
     if table_id == "table-pct" and current_filename and current_filename.startswith('Zomer'):
-        # Get the summer highlighting data with simplified rules
-        import logging
-        logging.info("=== DEBUG: make_table - About to call get_summer_highlighting_data (simplified) ===")
         try:
             summer_highlighting = get_summer_highlighting_data()
-            logging.info(f"=== DEBUG: make_table - summer_highlighting length: {len(summer_highlighting)} ===")
             if summer_highlighting:
                 style_data_conditional.extend(summer_highlighting)
         except Exception as e:
-            logging.error(f"=== DEBUG: make_table - Error in get_summer_highlighting_data: {e} ===")
+            pass
 
     button_group = []
     if klasse_filter_id:
