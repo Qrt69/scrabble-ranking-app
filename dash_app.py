@@ -491,15 +491,27 @@ def load_current_data():
     # Sync with Dropbox - this is required for online app
     logger.info("Syncing Excel files from Dropbox...")
     try:
-        required_files = ["Globaal 2024-2025.xlsx", "Zomer 2025.xlsx"]
         dropbox_manager = dropbox_integration.get_dropbox_manager()
         if dropbox_manager:
-            synced_files = dropbox_manager.sync_excel_files(required_files)
+            # Dynamically discover all season files from Dropbox
+            all_files = dropbox_manager.list_files()
+            season_files = []
+            
+            # Look for Globaal and Zomer files
+            for file_info in all_files:
+                filename = file_info['name']
+                if (filename.startswith('Globaal ') and filename.endswith('.xlsx')) or \
+                   (filename.startswith('Zomer ') and filename.endswith('.xlsx')):
+                    season_files.append(filename)
+            
+            logger.info(f"Found season files in Dropbox: {season_files}")
+            
+            # Sync all discovered season files
+            synced_files = dropbox_manager.sync_excel_files(season_files)
             logger.info(f"Synced {len(synced_files)} files from Dropbox: {synced_files}")
             
             if not synced_files:
-                logger.error("No files synced from Dropbox - app cannot function")
-                logger.error(f"Required files: {required_files}")
+                logger.error("No season files synced from Dropbox - app cannot function")
                 # Initialize with empty data
                 df_global = pd.DataFrame()
                 df_gen_info = pd.DataFrame()
@@ -1088,6 +1100,15 @@ app.layout = dbc.Container([
             )
         ], md=6),
         dbc.Col([
+            html.Label("&nbsp;", className="mb-2"),  # Spacer for alignment
+            html.Button(
+                "🔄 Ververs seizoenen",
+                id="refresh-seasons-btn",
+                className="btn btn-outline-secondary btn-sm",
+                style={"marginBottom": "20px"}
+            )
+        ], md=6),
+        dbc.Col([
             html.Div(id="current-season-info", className="text-muted")
         ], md=6)
     ], className="mb-4"),
@@ -1153,6 +1174,44 @@ def update_season_info(selected_season):
                           className="text-info")
             ])
     return "Geen seizoen geselecteerd"
+
+@app.callback(
+    Output("season-selector", "options"),
+    Input("refresh-seasons-btn", "n_clicks"),
+    prevent_initial_call=True
+)
+def refresh_seasons(n_clicks):
+    """Refresh the season dropdown by syncing with Dropbox"""
+    if n_clicks:
+        logger.info("Refreshing seasons from Dropbox...")
+        try:
+            # Re-run the Dropbox sync logic
+            dropbox_manager = dropbox_integration.get_dropbox_manager()
+            if dropbox_manager:
+                # Dynamically discover all season files from Dropbox
+                all_files = dropbox_manager.list_files()
+                season_files = []
+                
+                # Look for Globaal and Zomer files
+                for file_info in all_files:
+                    filename = file_info['name']
+                    if (filename.startswith('Globaal ') and filename.endswith('.xlsx')) or \
+                       (filename.startswith('Zomer ') and filename.endswith('.xlsx')):
+                        season_files.append(filename)
+                
+                logger.info(f"Found season files in Dropbox: {season_files}")
+                
+                # Sync all discovered season files
+                synced_files = dropbox_manager.sync_excel_files(season_files)
+                logger.info(f"Synced {len(synced_files)} files from Dropbox: {synced_files}")
+            
+            # Get updated available seasons
+            return get_available_seasons()
+        except Exception as e:
+            logger.error(f"Error refreshing seasons: {e}")
+            return get_available_seasons()  # Return current seasons on error
+    
+    return get_available_seasons()
 
 @app.callback(
     Output("tab-content", "children"),
