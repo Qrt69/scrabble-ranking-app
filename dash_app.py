@@ -1616,11 +1616,30 @@ def handle_csv_upload(contents, filename):
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
     try:
-        # Try to read as CSV (semicolon or comma separated)
-        try:
-            df = pd.read_csv(io.StringIO(decoded.decode('utf-8')), sep=';')
-        except Exception:
-            df = pd.read_csv(io.StringIO(decoded.decode('utf-8')), sep=',')
+        # Try to read as CSV with different encodings
+        df = None
+        encodings = ['utf-8', 'iso-8859-1', 'windows-1252', 'cp1252']
+        
+        for encoding in encodings:
+            try:
+                decoded_str = decoded.decode(encoding)
+                # Try semicolon separator first
+                try:
+                    df = pd.read_csv(io.StringIO(decoded_str), sep=';')
+                    break
+                except Exception:
+                    # Try comma separator
+                    try:
+                        df = pd.read_csv(io.StringIO(decoded_str), sep=',')
+                        break
+                    except Exception:
+                        continue
+            except UnicodeDecodeError:
+                continue
+        
+        if df is None:
+            return f'Fout bij het lezen van het CSV-bestand: Kan het bestand niet decoderen met ondersteunde encodings (utf-8, windows-1252, iso-8859-1, cp1252)'
+            
     except Exception as e:
         return f'Fout bij het lezen van het CSV-bestand: {e}'
 
@@ -1667,10 +1686,31 @@ def process_upload(date, contents, filename):
         content_type, content_string = contents.split(',')
         decoded = base64.b64decode(content_string)
         try:
-            try:
-                df = pd.read_csv(io.StringIO(decoded.decode('utf-8')), sep=';')
-            except Exception:
-                df = pd.read_csv(io.StringIO(decoded.decode('utf-8')), sep=',')
+            # Try to read as CSV with different encodings
+            df = None
+            encodings = ['utf-8', 'iso-8859-1', 'windows-1252', 'cp1252']
+            
+            for encoding in encodings:
+                try:
+                    decoded_str = decoded.decode(encoding)
+                    # Try semicolon separator first
+                    try:
+                        df = pd.read_csv(io.StringIO(decoded_str), sep=';')
+                        break
+                    except Exception:
+                        # Try comma separator
+                        try:
+                            df = pd.read_csv(io.StringIO(decoded_str), sep=',')
+                            break
+                        except Exception:
+                            continue
+                except UnicodeDecodeError:
+                    continue
+            
+            if df is None:
+                logger.error("CSV read error: Could not decode with any supported encoding")
+                return f'Fout bij het lezen van het CSV-bestand: Kan het bestand niet decoderen met ondersteunde encodings (utf-8, windows-1252, iso-8859-1, cp1252)'
+                
         except Exception as e:
             logger.error(f"CSV read error: {e}")
             return f'Fout bij het lezen van het CSV-bestand: {e}'
