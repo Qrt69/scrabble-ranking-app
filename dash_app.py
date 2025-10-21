@@ -596,41 +596,23 @@ except Exception as e:
 def load_member_data():
     """Load member data from Dropbox Leden.xlsx file"""
     try:
-        # Use Dropbox integration to load Leden.xlsx
         if USE_DROPBOX:
             dropbox_manager = dropbox_integration.get_dropbox_manager()
             if dropbox_manager:
-                # Check if Leden.xlsx exists in Dropbox
-                all_files = dropbox_manager.list_files()
-                leden_file = None
-                for file_info in all_files:
-                    if file_info['name'] == 'Leden.xlsx':
-                        leden_file = file_info
-                        break
-                
-                if leden_file:
-                    # Download Leden.xlsx from Dropbox
-                    local_path = dropbox_manager.download_file('Leden.xlsx')
-                    if local_path and os.path.exists(local_path):
-                        df_leden = pd.read_excel(local_path, sheet_name="Leden")
-                        # Handle different possible column names
-                        if 'NAAM' in df_leden.columns:
-                            df_leden.rename(columns={'NAAM': 'Naam'}, inplace=True)
-                        if 'CLUB' not in df_leden.columns and 'Club' in df_leden.columns:
-                            df_leden.rename(columns={'Club': 'CLUB'}, inplace=True)
-                        if 'KLASSE' not in df_leden.columns and 'Klasse' in df_leden.columns:
-                            df_leden.rename(columns={'Klasse': 'KLASSE'}, inplace=True)
-                        
-                        logger.info(f"Loaded {len(df_leden)} members from Dropbox Leden.xlsx")
-                        return df_leden
-                    else:
-                        logger.error("Failed to download Leden.xlsx from Dropbox")
-                else:
-                    logger.warning("Leden.xlsx not found in Dropbox")
-            else:
-                logger.error("Dropbox manager not available")
-        else:
-            logger.error("Dropbox integration not available")
+                # Download Leden.xlsx from Dropbox
+                local_path = dropbox_manager.download_file('Leden.xlsx')
+                if local_path and os.path.exists(local_path):
+                    df_leden = pd.read_excel(local_path, sheet_name="Leden")
+                    # Handle different possible column names
+                    if 'NAAM' in df_leden.columns:
+                        df_leden.rename(columns={'NAAM': 'Naam'}, inplace=True)
+                    if 'CLUB' not in df_leden.columns and 'Club' in df_leden.columns:
+                        df_leden.rename(columns={'Club': 'CLUB'}, inplace=True)
+                    if 'KLASSE' not in df_leden.columns and 'Klasse' in df_leden.columns:
+                        df_leden.rename(columns={'Klasse': 'KLASSE'}, inplace=True)
+                    
+                    logger.info(f"Loaded {len(df_leden)} members from Dropbox Leden.xlsx")
+                    return df_leden
     except Exception as e:
         logger.error(f"Error loading member data from Dropbox: {e}")
     
@@ -653,18 +635,9 @@ def save_member_data(df):
 df_leden = load_member_data()
 logger.info(f"Loaded {len(df_leden)} members from data source")
 if not df_leden.empty:
-    logger.info(f"Sample members: {df_leden.head(3).to_dict('records')}")
+    logger.info(f"Member data loaded: {df_leden.head(3).to_dict('records')}")
 else:
-    logger.info("No member data found - creating sample data for testing")
-    # Create some sample data for testing
-    sample_members = [
-        {'Naam': 'Jan Janssens', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'},
-        {'Naam': 'Piet Pieters', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'B'},
-        {'Naam': 'Marie Maes', 'CLUB': 'COXHYDE, Koksijde', 'KLASSE': 'A'}
-    ]
-    df_leden = pd.DataFrame(sample_members)
-    save_member_data(df_leden)
-    logger.info(f"Created sample data with {len(df_leden)} members")
+    logger.warning("No member data loaded - check if Leden.xlsx exists in Dropbox")
 
 def make_table(df, table_id, title, klasse_filter_id=None):
     if df.empty:
@@ -2306,7 +2279,7 @@ def update_member_table(tab_value, refresh_clicks):
         {"name": "Klasse", "id": "KLASSE"}
     ]
     
-    print(f"Creating member table with {len(df_leden)} members")
+    print(f"Creating member table with {len(df_leden)} members from Leden.xlsx")
     
     return dash_table.DataTable(
         id="member-table",
