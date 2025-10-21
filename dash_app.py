@@ -599,20 +599,21 @@ def load_member_data():
         if USE_DROPBOX:
             dropbox_manager = dropbox_integration.get_dropbox_manager()
             if dropbox_manager:
-                # Download Leden.xlsx from Dropbox
-                local_path = dropbox_manager.download_file('Leden.xlsx')
-                if local_path and os.path.exists(local_path):
-                    df_leden = pd.read_excel(local_path, sheet_name="Leden")
-                    # Handle different possible column names
-                    if 'NAAM' in df_leden.columns:
-                        df_leden.rename(columns={'NAAM': 'Naam'}, inplace=True)
-                    if 'CLUB' not in df_leden.columns and 'Club' in df_leden.columns:
-                        df_leden.rename(columns={'Club': 'CLUB'}, inplace=True)
-                    if 'KLASSE' not in df_leden.columns and 'Klasse' in df_leden.columns:
-                        df_leden.rename(columns={'Klasse': 'KLASSE'}, inplace=True)
-                    
-                    logger.info(f"Loaded {len(df_leden)} members from Dropbox Leden.xlsx")
-                    return df_leden
+                # Use the same sync method that works for other files
+                synced_files = dropbox_manager.sync_excel_files(['Leden.xlsx'])
+                if synced_files and 'Leden.xlsx' in synced_files:
+                    if os.path.exists('Leden.xlsx'):
+                        df_leden = pd.read_excel('Leden.xlsx', sheet_name="Leden")
+                        # Handle different possible column names
+                        if 'NAAM' in df_leden.columns:
+                            df_leden.rename(columns={'NAAM': 'Naam'}, inplace=True)
+                        if 'CLUB' not in df_leden.columns and 'Club' in df_leden.columns:
+                            df_leden.rename(columns={'Club': 'CLUB'}, inplace=True)
+                        if 'KLASSE' not in df_leden.columns and 'Klasse' in df_leden.columns:
+                            df_leden.rename(columns={'Klasse': 'KLASSE'}, inplace=True)
+                        
+                        logger.info(f"Loaded {len(df_leden)} members from Dropbox Leden.xlsx")
+                        return df_leden
     except Exception as e:
         logger.error(f"Error loading member data from Dropbox: {e}")
     
