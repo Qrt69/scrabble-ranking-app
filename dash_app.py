@@ -594,33 +594,47 @@ except Exception as e:
 
 # Member management functions
 def load_member_data():
-    """Load member data from JSON file or create from Excel if not exists"""
-    json_file = "members.json"
+    """Load member data from Dropbox Leden.xlsx file"""
+    try:
+        # Use Dropbox integration to load Leden.xlsx
+        if USE_DROPBOX:
+            dropbox_manager = dropbox_integration.get_dropbox_manager()
+            if dropbox_manager:
+                # Check if Leden.xlsx exists in Dropbox
+                all_files = dropbox_manager.list_files()
+                leden_file = None
+                for file_info in all_files:
+                    if file_info['name'] == 'Leden.xlsx':
+                        leden_file = file_info
+                        break
+                
+                if leden_file:
+                    # Download Leden.xlsx from Dropbox
+                    local_path = dropbox_manager.download_file('Leden.xlsx')
+                    if local_path and os.path.exists(local_path):
+                        df_leden = pd.read_excel(local_path, sheet_name="Leden")
+                        # Handle different possible column names
+                        if 'NAAM' in df_leden.columns:
+                            df_leden.rename(columns={'NAAM': 'Naam'}, inplace=True)
+                        if 'CLUB' not in df_leden.columns and 'Club' in df_leden.columns:
+                            df_leden.rename(columns={'Club': 'CLUB'}, inplace=True)
+                        if 'KLASSE' not in df_leden.columns and 'Klasse' in df_leden.columns:
+                            df_leden.rename(columns={'Klasse': 'KLASSE'}, inplace=True)
+                        
+                        logger.info(f"Loaded {len(df_leden)} members from Dropbox Leden.xlsx")
+                        return df_leden
+                    else:
+                        logger.error("Failed to download Leden.xlsx from Dropbox")
+                else:
+                    logger.warning("Leden.xlsx not found in Dropbox")
+            else:
+                logger.error("Dropbox manager not available")
+        else:
+            logger.error("Dropbox integration not available")
+    except Exception as e:
+        logger.error(f"Error loading member data from Dropbox: {e}")
     
-    # Try to load from JSON first
-    if os.path.exists(json_file):
-        try:
-            with open(json_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            logger.info(f"Loaded {len(data)} members from JSON")
-            return pd.DataFrame(data)
-        except Exception as e:
-            logger.error(f"Error loading members.json: {e}")
-    
-    # If JSON doesn't exist, create from Excel file
-    if os.path.exists("Info.xlsx"):
-        try:
-            df_leden = pd.read_excel("Info.xlsx", sheet_name="Leden")
-            df_leden.rename(columns={'NAAM': 'Naam'}, inplace=True)
-            
-            # Save to JSON for future use
-            save_member_data(df_leden)
-            logger.info(f"Created members.json from Excel with {len(df_leden)} members")
-            return df_leden
-        except Exception as e:
-            logger.error(f"Error loading from Info.xlsx: {e}")
-    
-    # No data available
+    # Fallback: no data available
     logger.warning("No member data available")
     return pd.DataFrame()
 
@@ -962,63 +976,27 @@ def make_management_tab():
         
         html.Hr(className="my-4"),
         
-        # Member Management Section
+        # Member Management Section - Now handled via Dropbox Leden.xlsx
         html.H4("👥 Leden Beheer", className="mb-3", style={"color": "#2c3e50"}),
-        html.P("Beheer de leden van de club. Je kunt leden toevoegen, verwijderen en hun klasse wijzigen.", className="text-muted mb-3"),
+        html.P("Leden worden beheerd via het Leden.xlsx bestand in Dropbox. Wijzig dit bestand direct om leden toe te voegen, te verwijderen of hun klasse te wijzigen.", className="text-muted mb-3"),
         html.Div([
             html.H6("Hoe te gebruiken:", className="mb-2"),
             html.Ul([
-                html.Li("📝 Klik op een naam om deze te bewerken"),
-                html.Li("🏢 Klik op de club cel om de hoofdclub te wijzigen"),
-                html.Li("📋 Klik op de klasse cel en typ 'A', 'B' of 'C' (hoofdletter)"),
-                html.Li("💾 Klik 'Wijzigingen opslaan' om wijzigingen permanent op te slaan"),
-                html.Li("🔄 Ververs de pagina om niet-opgeslagen wijzigingen te annuleren"),
-                html.Li("🗑️ Klik op het prullenbak-icoon om een lid te verwijderen")
+                html.Li("📁 Open het Leden.xlsx bestand in je Dropbox folder"),
+                html.Li("📝 Bewerk de leden direct in Excel"),
+                html.Li("💾 Sla het bestand op in Dropbox"),
+                html.Li("🔄 Ververs de app om de wijzigingen te zien"),
+                html.Li("⚠️ Wijzig alleen klassen aan het begin van een nieuw seizoen")
             ], className="text-muted mb-3")
         ]),
         
         html.Div([
-            html.Button("Voeg nieuw lid toe", id="add-member-btn", className="btn btn-success me-2"),
+            html.Button("Ververs leden data", id="refresh-members-btn", className="btn btn-primary me-2"),
             html.Button("Export leden", id="export-members-btn", className="btn btn-info me-2"),
-            html.Button("Print leden", id="print-members-btn", className="btn btn-primary me-2", 
-                      **{"data-print": "true"}),
-            html.Button("Wijzigingen opslaan", id="save-changes-btn", className="btn btn-primary me-2"),
             dcc.Download(id="download-members-xlsx"),
         ], className="mb-3"),
         
         html.Div(id="member-table-container"),
-        
-        # Add Member Modal
-        dbc.Modal([
-            dbc.ModalHeader(dbc.ModalTitle("Nieuw lid toevoegen")),
-            dbc.ModalBody([
-                dbc.Input(
-                    id="new-member-name",
-                    placeholder="Naam",
-                    className="mb-3"
-                ),
-                dbc.Input(
-                    id="new-member-club",
-                    placeholder="Club (bijv. COXHYDE, Koksijde)",
-                    className="mb-3"
-                ),
-                dbc.Select(
-                    id="new-member-class",
-                    options=[
-                        {"label": "Klasse A", "value": "A"},
-                        {"label": "Klasse B", "value": "B"},
-                        {"label": "Klasse C", "value": "C"}
-                    ],
-                    value="B",
-                    className="mb-3"
-                ),
-                html.Div(id="add-member-status", className="text-danger mb-3"),
-            ]),
-            dbc.ModalFooter([
-                dbc.Button("Toevoegen", id="confirm-add-member-btn", color="success"),
-                dbc.Button("Annuleren", id="cancel-add-member-btn", color="secondary")
-            ])
-        ], id="add-member-modal", is_open=False),
         
         html.Div(id="member-management-status", className="mt-3")
     ])
@@ -1096,15 +1074,6 @@ app.layout = dbc.Container([
                 options=available_seasons,
                 value=current_filename if current_filename else None,
                 placeholder="Kies een seizoen...",
-                style={"marginBottom": "20px"}
-            )
-        ], md=6),
-        dbc.Col([
-            html.Label("&nbsp;", className="mb-2"),  # Spacer for alignment
-            html.Button(
-                "🔄 Ververs seizoenen",
-                id="refresh-seasons-btn",
-                className="btn btn-outline-secondary btn-sm",
                 style={"marginBottom": "20px"}
             )
         ], md=6),
@@ -2311,44 +2280,38 @@ def handle_logout(logout_clicks):
 original_member_data = None
 current_member_data = None  # Store current unsaved changes
 
-# Member Management Callbacks
+# Member Management Callbacks - Now simplified for Dropbox-based management
 @app.callback(
     Output("member-table-container", "children"),
-    [Input("tabs", "value")],
+    [Input("tabs", "value"), Input("refresh-members-btn", "n_clicks")],
     prevent_initial_call=False
 )
-def update_member_table(tab_value):
+def update_member_table(tab_value, refresh_clicks):
     if tab_value != "tab-management":
         return no_update
     
-    global df_leden, original_member_data, current_member_data
+    global df_leden
     
-    print(f"Tab changed to management. Member data: {len(df_leden)} members")
+    # Reload member data from Dropbox if refresh button was clicked
+    if refresh_clicks:
+        df_leden = load_member_data()
+        print(f"Refreshed member data: {len(df_leden)} members")
     
     if df_leden.empty:
-        return html.P("Geen leden data beschikbaar", className="text-muted")
-    
-    # Store original data from JSON file
-    original_member_data = df_leden.to_dict("records")
-    # Initialize current data as original data
-    current_member_data = original_member_data.copy()
+        return html.P("Geen leden data beschikbaar. Controleer of Leden.xlsx in Dropbox bestaat.", className="text-muted")
     
     columns = [
-        {"name": "Naam", "id": "Naam", "editable": True},
-        {"name": "Club", "id": "CLUB", "editable": True},
-        {"name": "Klasse", "id": "KLASSE", "editable": True}
+        {"name": "Naam", "id": "Naam"},
+        {"name": "Club", "id": "CLUB"},
+        {"name": "Klasse", "id": "KLASSE"}
     ]
     
-    # Add some debugging info
     print(f"Creating member table with {len(df_leden)} members")
-    print(f"Member data: {df_leden.to_dict('records')[:2]}")  # Show first 2 records
     
     return dash_table.DataTable(
         id="member-table",
         columns=columns,
-        data=current_member_data,
-        editable=True,
-        row_deletable=True,
+        data=df_leden.to_dict("records"),
         style_table={"overflowX": "auto"},
         style_cell={
             "padding": "8px",
@@ -2369,137 +2332,15 @@ def update_member_table(tab_value):
         ]
     )
 
-@app.callback(
-    Output("add-member-modal", "is_open"),
-    [Input("add-member-btn", "n_clicks"),
-     Input("confirm-add-member-btn", "n_clicks"),
-     Input("cancel-add-member-btn", "n_clicks")],
-    [State("add-member-modal", "is_open")],
-    prevent_initial_call=True
-)
-def toggle_add_member_modal(add_clicks, confirm_clicks, cancel_clicks, is_open):
-    ctx = dash.callback_context
-    if not ctx.triggered:
-        return is_open
-    
-    button_id = ctx.triggered[0]["prop_id"].split(".")[0]
-    
-    if button_id == "add-member-btn":
-        return True
-    elif button_id in ["confirm-add-member-btn", "cancel-add-member-btn"]:
-        return False
-    
-    return is_open
-
-@app.callback(
-    [Output("member-management-status", "children"),
-     Output("add-member-modal", "is_open", allow_duplicate=True),
-     Output("new-member-name", "value"),
-     Output("new-member-club", "value"),
-     Output("new-member-class", "value")],
-    [Input("confirm-add-member-btn", "n_clicks")],
-    [State("new-member-name", "value"),
-     State("new-member-club", "value"),
-     State("new-member-class", "value")],
-    prevent_initial_call=True
-)
-def add_new_member(confirm_clicks, name, club, klasse):
-    if not confirm_clicks or not name:
-        return no_update, no_update, "", "", "B"
-    
-    if not club:
-        return "❌ Vul een club in!", True, name, club, klasse
-    
-    global current_member_data
-    
-    # Check if member already exists
-    if current_member_data:
-        existing_names = [member['Naam'] for member in current_member_data]
-        if name in existing_names:
-            return "❌ Lid bestaat al!", True, name, club, klasse
-    
-    # Add new member to current data
-    new_member = {
-        'Naam': name,
-        'CLUB': club,
-        'KLASSE': klasse
-    }
-    
-    if current_member_data is None:
-        current_member_data = []
-    
-    current_member_data.append(new_member)
-    
-    # Don't auto-save, let user save manually
-    return f"✅ {name} toegevoegd - klik 'Wijzigingen opslaan' om op te slaan", False, "", "", "B"
-
-@app.callback(
-    Output("member-management-status", "children", allow_duplicate=True),
-    [Input("member-table", "data_timestamp")],
-    [State("member-table", "data")],
-    prevent_initial_call=True
-)
-def track_member_changes(timestamp, data):
-    """Track changes but don't auto-save"""
-    if not data:
-        return no_update
-    
-    global current_member_data, original_member_data
-    
-    print(f"Member table data changed. New data: {len(data)} rows")
-    print(f"Current data: {len(current_member_data) if current_member_data else 0} rows")
-    
-    # Validate class values
-    new_df = pd.DataFrame(data)
-    invalid_classes = new_df[~new_df['KLASSE'].isin(['A', 'B', 'C'])]['KLASSE'].unique()
-    if len(invalid_classes) > 0:
-        return f"❌ Ongeldige klasse waarden: {', '.join(invalid_classes)}. Gebruik alleen A, B of C."
-    
-    # Check if this is the initial load (data matches original)
-    if original_member_data and len(data) == len(original_member_data):
-        # Compare the data to see if there are actual changes
-        data_sorted = sorted(data, key=lambda x: x['Naam'])
-        original_sorted = sorted(original_member_data, key=lambda x: x['Naam'])
-        
-        if data_sorted == original_sorted:
-            # No actual changes, just initial load
-            current_member_data = data
-            print("Initial load detected, no changes")
-            return no_update
-    
-    # Update current data but don't save to global df_leden yet
-    current_member_data = data
-    print("Data has changed, updating current data...")
-    return "📝 Wijzigingen gemaakt - klik 'Wijzigingen opslaan' om op te slaan"
-
-# Callback to handle save changes button
-@app.callback(
-    Output("member-management-status", "children", allow_duplicate=True),
-    [Input("save-changes-btn", "n_clicks")],
-    prevent_initial_call=True
-)
-def save_changes(n_clicks):
-    """Save changes to JSON file"""
-    global df_leden, current_member_data
-    
-    if not n_clicks or not current_member_data:
-        return no_update
-    
-    print("Saving changes to JSON file...")
-    
-    # Update global df_leden with current changes
-    df_leden = pd.DataFrame(current_member_data)
-    
-    # Save to JSON
-    if save_member_data(df_leden):
-        return "✅ Wijzigingen opgeslagen!"
-    else:
-        return "❌ Fout bij opslaan van wijzigingen!"
 
 
 
 
 
+
+
+
+# Export members callback
 @app.callback(
     Output("download-members-xlsx", "data"),
     Input("export-members-btn", "n_clicks"),
@@ -2511,31 +2352,8 @@ def export_members(export_clicks):
     
     def writer(buf):
         df_leden.to_excel(buf, index=False)
-    return dcc.send_bytes(writer, "Leden.xlsx")
+    return dcc.send_bytes(writer, "Leden_Export.xlsx")
 
-# Additional callback to handle row deletions specifically
-@app.callback(
-    Output("member-management-status", "children", allow_duplicate=True),
-    [Input("member-table", "data_previous")],
-    [State("member-table", "data")],
-    prevent_initial_call=True
-)
-def handle_member_deletions(previous_data, current_data):
-    if not previous_data or not current_data:
-        return no_update
-    
-    global current_member_data
-    
-    # Check if a row was deleted
-    if len(previous_data) > len(current_data):
-        print(f"Row deletion detected: {len(previous_data)} -> {len(current_data)} rows")
-        
-        # Update current data but don't save yet
-        current_member_data = current_data
-        
-        return "🗑️ Lid verwijderd - klik 'Wijzigingen opslaan' om permanent op te slaan"
-    
-    return no_update
 
 # Print functionality is now handled by JavaScript in the HTML template
 
